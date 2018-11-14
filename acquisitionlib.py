@@ -277,5 +277,3 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
 #
 #            # get the pixel information
 #            image_data = nd2f[t_id]
-
-

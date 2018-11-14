@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # parameter file
     if namespace.paramfile is None:
         allparams = default_parameters()
-        paramfile = "params_default.yml"
+        paramfile = "process_nd2.yml"
         with open(paramfile,'w') as fout:
             yaml.dump(allparams,fout)
     else:
