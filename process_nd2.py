@@ -28,8 +28,8 @@ def default_parameters():
     print "Loading default parameters"
     params={}
     # filtering - select only a subset
-    params['get_nd2_images_args']={}
-    mydict = params['get_nd2_images_args']
+    params['process_nd2']={}
+    mydict = params['process_nd2']
     mydict['tstart'] = 0
     mydict['tend'] = 2
     mydict['fovs'] = [0,1,2]
@@ -77,12 +77,12 @@ if __name__ == "__main__":
 
     # load ND2 file
     ## load images
-    params=allparams['get_nd2_images_args']
-    images = acq.get_nd2_images(namespace.ND2,**params)
+    params=allparams['process_nd2']
+    metainfo = acq.process_nd2_tiff(namespace.ND2, tiffdir=outputdir, **params)
     ## print metadata
     fileout = os.path.join(outputdir, "metadata.txt")
     with open(fileout,'w') as fout:
-        yaml.safe_dump(images.metadata, fout, encoding=('utf-8'), default_flow_style=False, allow_unicode=False)
+        yaml.safe_dump(metainfo, fout, encoding=('utf-8'), default_flow_style=False, allow_unicode=False)
 
 
 

@@ -5,6 +5,7 @@ import numpy as np
 #from nd2reader import ND2Reader # does not work properly
 from pims_nd2 import ND2_Reader as ND2Reader
 #from pims import FramesSequenceND
+import tifffile as ti
 
 
 #class ImageReaderND(FramesSequenceND):
@@ -55,7 +56,7 @@ from pims_nd2 import ND2_Reader as ND2Reader
 
 #################### methods ####################
 
-def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcrop=None, ycrop=None, tiffdir='TIFF'):
+def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcrop=None, ycrop=None, tiffdir='TIFF'):
     """
     Return the iterator over images contained in an ND2 file.
     """
@@ -67,6 +68,10 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
     nd2_iterator = ND2Reader(nd2file)
     axes = nd2_iterator.axes  # list of char ['t', 'm', 'c', 'z',] 'y' or 'x'
     sizes = nd2_iterator.sizes  # dict with keys in axes list and value is the corresponding dimension
+    print vars(nd2_iterator).keys()
+    bname = os.path.splitext(os.path.basename(nd2_iterator.filename))[0]
+    print "{:<20s}{:<s}".format('bname',bname)
+
     print "Axes:", axes
     print "Sizes:"
     for ax in axes:
@@ -77,9 +82,14 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
     for ax in axes:
         idx[ax]=None
 
+    # make format dictionary
+    fmtdict={}
+
     ## time
     if ('t' in axes):
         nt = sizes['t']
+        fmt="t{{t:0{:d}d}}".format(int(np.log(nt)))
+        fmtdict['t']=fmt
         if (tstart is None):
             tstart = 0
         if (tend is None):
@@ -92,6 +102,8 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
     ## fov
     if ('m' in axes):
         nm = sizes['m']
+        fmt="f{{fov:0{:d}d}}".format(int(np.log(nm)))
+        fmtdict['m']=fmt
         if (fovs is None):
             fovs = np.arange(nm)
         print "FOVs"
@@ -102,6 +114,8 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
     ## colors
     if ('c' in axes):
         nc = sizes['c']
+        fmt="c{{c:0{:d}d}}".format(int(np.log(nc)))
+        fmtdict['c']=fmt
         if (colors is None):
             colors = np.arange(nc)
         for i in colors:
@@ -122,7 +136,9 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
         yhi=ny-1
     if not (ylo < yhi):
         print "Problem with y-cropping: ylo = {:d}    yhi = {:d}".format(ylo,yhi)
-    idx['y']=np.arange(ylo,yhi+1)
+    if np.mod(yhi+1-ylo,2) == 1:
+        yhi = yhi - 1
+    idx['y']=np.arange(ylo,yhi+1, dtype=np.uint)
 
     ### x
     nx = sizes['x']
@@ -136,9 +152,9 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
         xhi=nx-1
     if not (xlo < xhi):
         print "Problem with x-cropping: xlo = {:d}    xhi = {:d}".format(xlo,xhi)
-    idx['x']=np.arange(xlo,xhi+1)
-
-    print idx
+    if np.mod(xhi+1-xlo,2) == 1:
+        xhi = xhi - 1
+    idx['x']=np.arange(xlo,xhi+1,dtype=np.uint)
 
     if 't' in axes:
         nd2_iterator.iter_axes='t'
@@ -150,73 +166,41 @@ def get_nd2_images(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcro
     else:
         nd2_iterator.iter_axes='m'
         nd2_iterator.bundle_axes='cyx'
-    print nd2_iterator.axes
-    print nd2_iterator.sizes
-    sys.exit()
 
+#    print nd2_iterator.axes
+#    print nd2_iterator.sizes
+    # format for file out
+
+    print "Starting per-FOV writing"
     for fov in idx['m']:
         print "FOV {:d}".format(fov)
-        subnd2 = nd2_iterator[fov]
-        print subnd2[0]
-        sys.exit()
+        frame = nd2_iterator[fov]
+        fov_no = frame.frame_no
+        tiff_meta = frame.metadata
+        if (fov_no != fov):
+            print "Inconsistency for fov {:d}: fov_no={:d}".format(fov,fov_no)
         if 't' in axes:
-            subnd2.iter_axes='t'
-            subnd2.bundle_axes='cyx'
-            print len(subnd2)
-            sys.exit()
-            print subnd2[idx['t']]
+            raise ValueError("Time axis handling not implemented yet.")
+            frame.iter_axes='t'
+            frame.bundle_axes='cyx'
         else:
-            print subnd2
-    sys.exit()
+            fmt=fmtdict['m']
+            img = np.array(frame)
+            # filtering
+            ## color
+            img = img[idx['c']]
+            ## y cropping
+            img = img[:, idx['y']]
+            ## x cropping
+            img = img[:,:,idx['x']]
+            # write tiff as a stack
+            fname = "{}_{}".format(bname,fmt)
+            fname = fname.format(fov=fov)
+            fileout = os.path.join(tiffdir,fname+'.tif')
+            ti.imwrite(fileout, img, imagej=True, photometric='minisblack',metadata=tiff_meta)
+            print "{:<20s}{:<s}".format('fileout', fileout)
 
-    # metadata
-    metadata = nd2_iterator.metadata
-    nd2_iterator.bundle_axes='tvcyx'
-    nframes,nfovs,ncolors,height,width=nd2_iterator.frame_shape
-    #print nframes, nfovs, ncolors, height, width
-
-    # filtering
-    ## frames
-    print "nframes = {:d}".format(nframes)
-    if nstart is None:
-        nstart = 0
-    if nend is None:
-        nend = nframes-1
-    nstart = max(0,nstart)
-    print "nstart={:d}".format(nstart)
-    nend = min(nframes-1,nend)
-    print "nend={:d}".format(nend)
-    nd2_iterator=nd2_iterator[nstart:nend+1]
-    nframes=len(nd2_iterator)
-    print "nframes = {:d}".format(nframes)
-
-    ## colors
-    print "ncolors = {:d}".format(ncolors)
-    if (colors is None):
-        colors = range(ncolors)
-    print colors
-    #nd2_iterator=nd2_iterator[:,:,colors,:,:]
-
-    ## HERE ##
-    # there is a bug here. I cannot select the color axes.
-    # maybe try to use directly pims_nd2 instead of ND2Reader
-    #nd2_iterator.iter_axes='c'
-    print "TEST"
-    print "Starting shape \'tvcyx\':"
-    print nd2_iterator.frame_shape
-    nd2_iterator.bundle_axes='ctvyx'
-    print "End shape \'ctvyx\':"
-    print nd2_iterator.frame_shape
-    nd2_iterator = nd2_iterator[colors]
-    print len(nd2_iterator)
-    print "TEST"
-    ## HERE ##
-
-    print nd2_iterator.frame_shape
-    sys.exit()
-    # conversions
-
-    return nd2_iterator
+    return nd2_iterator.metadata
 
 #    # get the color names out. Kinda roundabout way.
 #    planes = [nd2f.metadata[md]['name'] for md in nd2f.metadata if md[0:6] == u'plane_' and not md == u'plane_count']
