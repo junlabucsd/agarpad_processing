@@ -6,9 +6,11 @@ import numpy as np
 import yaml
 import argparse
 import shutil
+import json
 
 # custom
 import acquisitionlib as acq
+from utils import *
 
 #################### global params ####################
 # yaml formats
@@ -81,10 +83,9 @@ if __name__ == "__main__":
     metainfo = acq.process_nd2_tiff(namespace.ND2, tiffdir=outputdir, **params)
     ## print metadata
     fileout = os.path.join(outputdir, "metadata.txt")
-    with open(fileout,'w') as fout:
-        yaml.safe_dump(metainfo, fout, encoding=('utf-8'), default_flow_style=False, allow_unicode=False)
-
-
-
-
+    metainfo = make_dict_serializable(metainfo)
+    write_dict2json(fileout,metainfo)
+#    with open(fileout,'w') as fout:
+#        yaml.safe_dump(metainfo, fout, encoding=('utf-8'), default_flow_style=False, allow_unicode=False)
+#
 

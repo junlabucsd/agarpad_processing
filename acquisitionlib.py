@@ -88,7 +88,7 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
     ## time
     if ('t' in axes):
         nt = sizes['t']
-        fmt="t{{t:0{:d}d}}".format(int(np.log(nt)))
+        fmt="t{{t:0{:d}d}}".format(int(np.log10(nt))+1)
         fmtdict['t']=fmt
         if (tstart is None):
             tstart = 0
@@ -102,7 +102,7 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
     ## fov
     if ('m' in axes):
         nm = sizes['m']
-        fmt="f{{fov:0{:d}d}}".format(int(np.log(nm)))
+        fmt="f{{fov:0{:d}d}}".format(int(np.log10(nm))+1)
         fmtdict['m']=fmt
         if (fovs is None):
             fovs = np.arange(nm)
@@ -114,7 +114,7 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
     ## colors
     if ('c' in axes):
         nc = sizes['c']
-        fmt="c{{c:0{:d}d}}".format(int(np.log(nc)))
+        fmt="c{{c:0{:d}d}}".format(int(np.log10(nc))+1)
         fmtdict['c']=fmt
         if (colors is None):
             colors = np.arange(nc)
