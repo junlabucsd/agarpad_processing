@@ -74,7 +74,7 @@ def get_tiff2ndarray(tiff_file,channel=0):
 
     return arr
 
-def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100, h0=10, h1=1000, acut=0.9, emin=1.0e-4, phase_contrast=False, debug=False):
+def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100, h0=10, h1=1000, acut=0.9, aratio_min=2., aratio_max=100., border_pad=5, emin=1.0e-4, phase_contrast=False, debug=False):
     """
     INPUT:
       * file to a tiff image.
@@ -132,47 +132,63 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     height,width = img_inv.shape
     Y,X = np.mgrid[0:height,0:width]
     boundingboxes=[]
+    boundingboxes_upright=[]
     pointsperbox=[]
-    upright=False
     for n in np.arange(ncomp):
         idx = (labels == n)
         points = np.transpose([X[idx],Y[idx]])
         pointsperbox.append(len(points))
-        if upright:
-            # upright rectangles
-            bb = cv2.boundingRect(points)
-            boundingboxes.append(bb)
-            x,y,w,h=bb
-            #cv2.rectangle(img_inv, (x,y), (x+w,y+h),(255,0,0),2) # to draw the rectangles
-        else:
-            # rotated rectangles
-            bb = cv2.minAreaRect(points)
-            boundingboxes.append(bb)
+        # upright rectangles
+        bb = cv2.boundingRect(points)
+        boundingboxes_upright.append(bb)
+
+        # rotated rectangles
+        bb = cv2.minAreaRect(points)
+        boundingboxes.append(bb)
 
     # estimator matrix
     ## compute scores
     scores = []
     for n in np.arange(ncomp):
         bb = boundingboxes[n]
+        bb_upright = boundingboxes_upright[n]
         area = pointsperbox[n]
-        if upright:
-            xlo,ylo,w,h = bb
-        else:
-            xymid,wh,angle=bb
-            w,h=wh
+
+        # get bounding box width and height
+        xymid,wh,angle=bb
+        w,h=wh
         if w > h:
             wtp=w
             w=h
             h=wtp
+
         area_rect = w*h
-        #print "w={:.1f}    h={:.1f}".format(w,h)
         aval = area/area_rect
+        aratio = h/w
+#        print "w={:.1f}    h={:.1f}  aval={:.2e}  aratio={:.1f}".format(w,h,aval,aratio)
+
+        # computing score
         score = 1.
-        score *= min(1,np.exp((w-w0)))                  # penalize w < w0
-        score *= min(1,np.exp(w1-w))               # penalize w > w1
-        score *= min(1,np.exp((h-h0)))                  # penalize w < w0
-        score *= min(1,np.exp(h1-h))               # penalize w > w1
-        score *= min(1,np.exp(aval-acut))   # penalize area/rect < acut
+        score *= min(1,np.exp((w-w0)))              # penalize w < w0
+        score *= min(1,np.exp(w1-w))                # penalize w > w1
+        score *= min(1,np.exp((h-h0)))              # penalize w < w0
+        score *= min(1,np.exp(h1-h))                # penalize w > w1
+        score *= min(1,np.exp(aval-acut))           # penalize area/rect < acut
+        score *= min(1,np.exp(aratio-aratio_min))   # penalize aratio < aratio_min
+        score *= min(1,np.exp(aratio_max-aratio))   # penalize aratio > aratio_max
+
+        # check that box corners of an upright bounding box are within the image plus some pad
+        x,y,ww,hh = bb_upright
+        x0 = x-border_pad
+        y0 = y-border_pad
+        x1 = x + ww + border_pad
+        y1 = y + hh + border_pad
+#        print "a0 = {:d}  b0 = {:d}".format(x,y)
+#        print "a1 = {:d}  b1 = {:d}".format(x+ww,y+hh)
+#        print "x0 = {:d}  y0 = {:d}".format(x0,y0)
+#        print "x1 = {:d}  y1 = {:d}".format(x1,y1)
+        if not (x0 >= 0 and x1 < width and y0 >=0 and y1 < height):
+            score = 0.
 
         # discard small values
         if score < emin:
@@ -232,18 +248,26 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
                 if titles[ind] == 'bounding box':
                     # draw bounding boxes
                     rects = []
+                    rects_upright = []
                     codes = [Path.MOVETO, Path.LINETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY]
-                    for bb in boundingboxes:
-                        if upright:
-                            xlo,ylo,w,h = bb
-                            rect = matplotlib.patches.Rectangle((xlo,ylo), width=w, height=h, fill=False)
-                        else:
-                            verts=cv2.boxPoints(bb)
-                            verts=np.concatenate((verts,[verts[0]]))
-                            path = Path(verts,codes)
-                            rect = matplotlib.patches.PathPatch(path)
+                    for n in range(ncomp):
+                        bb_upright = boundingboxes_upright[n]
+                        bb = boundingboxes[n]
+                        # upright rect
+                        xlo,ylo,w,h = bb_upright
+                        rect = matplotlib.patches.Rectangle((xlo,ylo), width=w, height=h, fill=False)
+                        rects_upright.append(rect)
+
+                        # rect
+                        verts=cv2.boxPoints(bb)
+                        verts=np.concatenate((verts,[verts[0]]))
+                        path = Path(verts,codes)
+                        rect = matplotlib.patches.PathPatch(path)
                         rects.append(rect)
-                    col = matplotlib.collections.PatchCollection(rects, edgecolors='k', facecolors='none', linewidths=0.5)
+
+                    col = matplotlib.collections.PatchCollection(rects_upright, edgecolors='k', facecolors='none', linewidths=0.5)
+                    ax.add_collection(col)
+                    col = matplotlib.collections.PatchCollection(rects, edgecolors='r', facecolors='none', linewidths=0.5)
                     ax.add_collection(col)
 
                 if titles[ind] == 'estimator':
@@ -295,7 +319,7 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
 
     return os.path.realpath(efile)
 
-def get_estimator(tiff_file, method='bounding_box', outputdir='.', channel=0, estimator_params=dict(w0=1, w1=100, l0=10, l1=1000, acut=0.9), emin=1.0e-4, debug=False):
+def get_estimator(tiff_file, method='bounding_box', outputdir='.', channel=0, estimator_params=dict(w0=1, w1=100, l0=10, l1=1000, acut=0.9, aratio_min=2., aratio_max=100.), emin=1.0e-4, debug=False):
     """
     Compute the estimator for a given images. The estimator is a real matrix where each entry is the estimation that the corresponding pixel belongs to the segmented class.
     INPUT:
@@ -305,7 +329,7 @@ def get_estimator(tiff_file, method='bounding_box', outputdir='.', channel=0, es
     """
     # perform the segmentation
     if method == 'bounding_box':
-        efile = get_estimator_bounding_box(tiff_file, channel=channel, outputdir=outputdir, debug=debug, emin=emin, **estimator_params)
+        efile = get_estimator_boundingbox(tiff_file, channel=channel, outputdir=outputdir, debug=debug, emin=emin, **estimator_params)
     else:
         raise ValueError("Segmentation method not implemented.")
 
@@ -346,7 +370,7 @@ def get_mask(f, ef, threshold=0., outputdir='.', debug=False):
         # plots
         import matplotlib.pyplot as plt
         height, width = mask.shape
-        ratio = float(height/width)
+        ratio = float(height)/width
         fig = plt.figure(num=None,figsize=(4,4*ratio))
         ax=fig.gca()
         ax.imshow(mask,cmap='gray')
@@ -398,7 +422,7 @@ def get_label(f, mf, outputdir='.', debug=False):
         # plots
         import matplotlib.pyplot as plt
         height, width = labels.shape
-        ratio = float(height/width)
+        ratio = float(height)/width
         fig = plt.figure(num=None,figsize=(4,4*ratio))
         ax=fig.gca()
         ax.imshow(labels_mod,cmap='tab20c')

@@ -129,23 +129,28 @@ def write_crop(img, mask, points, bname, tiff_dir='.', mask_dir='.', pad_x=5, pa
         if not os.path.isdir(debugdir):
             os.makedirs(debugdir)
         import matplotlib.pyplot as plt
-        plt.subplot(141)
-        plt.imshow(img[3], cmap='gray')
+        plt.subplot(151)
+        plt.imshow((img[3]-np.min(img[3]))/(np.max(img[3])-np.min(img[3])), cmap='gray')
         plt.xticks([]),plt.yticks([])
 
-        plt.subplot(142)
+        plt.subplot(152)
         plt.imshow(mask, cmap='gray')
         plt.xticks([]),plt.yticks([])
 
-        plt.subplot(143)
+        plt.subplot(153)
         plt.imshow(filled, cmap='gray')
         plt.xticks([]),plt.yticks([])
 
-        plt.subplot(144)
+        plt.subplot(154)
         if nchannel is None:
             plt.imshow(subimg, cmap='gray')
         else:
             plt.imshow(subimg[-1], cmap='gray')
+
+        plt.subplot(155)
+        plt.imshow(submask, cmap='gray')
+        plt.xticks([]),plt.yticks([])
+
         plt.xticks([]),plt.yticks([])
         fileout = os.path.join(debugdir,bname+".png")
         plt.savefig(fileout, dpi=300, bbox_inches='tight', pad_inches=0)
@@ -158,8 +163,10 @@ def write_crop(img, mask, points, bname, tiff_dir='.', mask_dir='.', pad_x=5, pa
     print "{:<20s}{:<s}".format('fileout',fileout)
 
     # write
-    fileout = os.path.join(mask_dir,bname+'.txt')
-    np.savetxt(fileout,submask)
+    fileout = os.path.join(mask_dir,bname+'.tif')
+    #fileout = os.path.join(mask_dir,bname+'.txt')
+    #np.savetxt(fileout,submask)
+    ti.imwrite(fileout, np.array(255*submask,dtype=np.uint8), imagej=True, photometric='minisblack')
     print "{:<20s}{:<s}".format('fileout',fileout)
 
     return
@@ -169,6 +176,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Segmentation tool -- cells.")
     parser.add_argument('-f', '--paramfile',  type=file, required=False, help='Yaml file containing parameters.')
     parser.add_argument('-d', '--outputdir',  type=str, required=False, help='Output directory')
+    parser.add_argument('--lean',  action='store_true', required=False, help='Do not write crops for collection.')
     parser.add_argument('--debug',  action='store_true', required=False, help='Enable debug mode')
 
     # INITIALIZATION
@@ -292,7 +300,7 @@ if __name__ == "__main__":
         # iterate over segmented objects
         for n in range(1, nlabels):
             cell = {}
-            print "Getting cell {:d} / {:d}".format(n,nlabels)
+            print "Getting cell {:d} / {:d} for FOV {:d}".format(n,nlabels,fov)
 
             # make index
             mask = (labels == n)
@@ -346,7 +354,8 @@ if __name__ == "__main__":
             cells.append(cell)
 
             # write tiff
-            write_crop(img, mask, points, bname=cell_id, tiff_dir=tiff_dir, mask_dir=mask_dir,debug=namespace.debug, **params['crops'])
+            if not namespace.lean:
+                write_crop(img, mask, points, bname=cell_id, tiff_dir=tiff_dir, mask_dir=mask_dir,debug=namespace.debug, **params['crops'])
 
 ncells = len(cells)
 print "ncells = {:d} collected".format(ncells)

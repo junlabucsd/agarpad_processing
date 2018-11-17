@@ -58,8 +58,9 @@ if __name__ == "__main__":
         outputdir = os.getcwd()
     else:
         outputdir = os.path.relpath(outputdir, os.getcwd())
-        if not os.path.isdir(outputdir):
-            os.makedirs(outputdir)
+    outputdir = os.path.join(outputdir,'TIFFS')
+    if not os.path.isdir(outputdir):
+        os.makedirs(outputdir)
     print "{:<20s}{:<s}".format("outputdir", outputdir)
 
     # parameter file
