@@ -307,6 +307,7 @@ if __name__ == "__main__":
 
             # fov
             cell['fov']=fov
+            cell['mpp']=mpp
 
             # get points
             points = np.transpose([X[mask],Y[mask]])
@@ -334,11 +335,13 @@ if __name__ == "__main__":
             cell['width']=w
             cell['height']=h
             cell['area']=P
+            cell['volume']=np.pi/4.* w**2*h - np.pi/12.*w**3 # cylinder with hemispherical caps of length h and width w
             cell['area_rect']=w*h
-            cell['width_um']=w*mpp
-            cell['height_um']=h*mpp
-            cell['area_um2']=P*mpp*mpp
-            cell['area_rect_um2']=w*h*mpp*mpp
+            cell['width_um']=cell['width']*mpp
+            cell['height_um']=cell['height']*mpp
+            cell['area_um2']=cell['area']*mpp*mpp
+            cell['area_rect_um2']=cell['area_rect']*mpp*mpp
+            cell['volume_um3']=cell['volume']*mpp*mpp*mpp
 
             # fluorescence
             val = img[:,mask]
@@ -357,12 +360,12 @@ if __name__ == "__main__":
             if not namespace.lean:
                 write_crop(img, mask, points, bname=cell_id, tiff_dir=tiff_dir, mask_dir=mask_dir,debug=namespace.debug, **params['crops'])
 
-ncells = len(cells)
-print "ncells = {:d} collected".format(ncells)
+    ncells = len(cells)
+    print "ncells = {:d} collected".format(ncells)
 
 # write down the cell dictionary
-celldict = {cell['id']: cell for cell in cells}
-celldict = make_dict_serializable(celldict)
-pathtocells = os.path.join(outputdir, 'collection.js')
-write_dict2json(pathtocells,celldict)
-print "{:<20s}{:<s}".format('fileout', pathtocells)
+    celldict = {cell['id']: cell for cell in cells}
+    celldict = make_dict_serializable(celldict)
+    pathtocells = os.path.join(outputdir, 'collection.js')
+    write_dict2json(pathtocells,celldict)
+    print "{:<20s}{:<s}".format('fileout', pathtocells)
