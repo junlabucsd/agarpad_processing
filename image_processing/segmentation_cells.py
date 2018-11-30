@@ -43,37 +43,6 @@ def default_parameters():
 
     return params
 
-def get_tiff2ndarray(tiff_file,channel=0):
-    """
-    Open a tiff_file and return a numpy array normalized between 0 and 1.
-    """
-    try:
-        img = ti.imread(tiff_file)
-    except:
-        raise ValueError("Opening tiff with PIL failed.")
-
-    naxis = len(img.shape)
-    if naxis == 2:
-        arr = img
-    elif naxis == 3:
-        arr = img[channel]
-    else:
-        raise ValueError("Hyperstacked handling not implemented.")
-
-    # determine input mode
-    dtype = arr.dtype
-    if (dtype == np.uint8):
-        norm = float(2**8-1)
-    elif (dtype == np.uint16):
-        norm = float(2**16-1)
-    elif (dtype == np.uint32):
-        norm = float(2**32-1)
-    else:
-        raise ValueError("Format not recognized.")
-    arr = np.array(arr, dtype=np.float_) / norm
-
-    return arr
-
 def get_background_img(img, size=65):
     """
     Compute background of an image and return it
