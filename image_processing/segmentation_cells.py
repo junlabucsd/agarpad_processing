@@ -37,9 +37,10 @@ def default_parameters():
     mydict = params['segmentation']
     mydict['method'] = 'bounding_box'
     mydict['estimator_params'] = {\
-            'bounding_box': dict(w0=1, w1=100, l0=10, l1=1000, acut=0.9)\
+            'bounding_box': dict(w0=1, w1=100, h0=10, h1=1000, acut=0.9, aratio_min=2., aratio_max=100., border_pad=5, emin=1.0e-4, threshold=None)\
             }
     mydict['channel'] = 0
+    mydict['mask_params']={'threshold': 0.95}
 
     return params
 
@@ -128,13 +129,14 @@ def get_background_img(img, size=65):
 #    # end j loop
     return bg
 
-def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100, h0=10, h1=1000, acut=0.9, aratio_min=2., aratio_max=100., border_pad=5, emin=1.0e-4, phase_contrast=False, bg_subtract=True, bg_size=200, debug=False):
+def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100, h0=10, h1=1000, acut=0.9, aratio_min=2., aratio_max=100., border_pad=5, emin=1.0e-4, debug=False, threshold=None):
     """
     INPUT:
       * file to a tiff image.
       * (w0,w1): minimum and maximum width for bounding box in pixels.
       * (l0,l1): minimum and maximum length for bounding box in pixels.
       * acut: minimum area/rectangle bounding box ratio.
+      * threshold is a lower threshold (everything below is set to zero). Value must be for the 8-bit image.
     OUTPUT:
       * 2D matrix of weights corresponding to the probability that a pixel belongs to a cell.
 
@@ -146,75 +148,34 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
       * https://docs.opencv.org/3.4/db/d5c/tutorial_py_bg_subtraction.html
     """
 
-    # pre-processing
     bname = os.path.splitext(os.path.basename(tiff_file))[0]
+
     ## read the input tiff_file
     img = get_tiff2ndarray(tiff_file, channel=channel)
-    ## rescale dynamic range linearly
-    img = (img - np.min(img))/(np.max(img)-np.min(img))
-    if phase_contrast:
-        img = 1. - img
-    img0 = np.copy(img)
+    #img0 = np.copy(img)
 
-    # pass a 8-bit image
+    # convert to 8-bit image (Open CV requirement for OTSU)
     img = np.array(255*img,np.uint8)
     img8 = np.copy(img)
 
-    # background subtraction
-    if bg_subtract:
-        bg_size = 2*int(bg_size/2) + 1 # make odd
-        print "bg_size = {:d}".format(bg_size)
-        #img_bg = get_background_img(img,size=bg_size)  # adhoc method for background subtraction
-        img_bg = cv2.medianBlur(img, ksize=bg_size) # better method for background subtraction
-        img_bg = cv2.blur(img_bg,ksize=(bg_size,bg_size)) # maybe not essential, to smooth background values
-        idx = img > img_bg
-        img[idx] = img[idx] - img_bg[idx]
-        img[~idx] = 0
-        img_subtracted = np.copy(img)
-    else:
-        img_subtracted = np.zeros(img.shape, dtype=np.uint8)
-
-    # preprocess the imaging for connected components finding
-    ## gaussian blur
-    scale=5
-    img = cv2.GaussianBlur(img,(scale,scale),sigmaX=0,sigmaY=0)
-    blur = np.copy(img)
-
-    ## adapative threshold for exposition correction
-    #blur = cv2.adaptiveThreshold(blur, 100, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,121,2)
-    #img_adthres = 255 - img # invert
-    #img_bg = cv2.GaussianBlur(img_bg,(5*size,5*size),sigmaX=0,sigmaY=0)
-    #kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(50,50))
-    #img_adthres = cv2.morphologyEx(img, cv2.MORPH_BLACKHAT, kernel)
-    #ret2,img_adthres = cv2.threshold(img_adthres, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    #img_adthres, = cv2rb.subtract_background_rolling_ball(img_adthres, radius=30, light_background=False,use_paraboloid=False,do_presmooth=False)
-    #img_adthres = cv2.adaptiveThreshold(img_adthres, maxValue=255, adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C, thresholdType=cv2.THRESH_BINARY,blockSize=513,C=2)
-    #img_adthres = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_TRUNC,211,0)
-    #ret, th3 = cv2.threshold(blur, 75, 255, cv2.THRESH_BINARY)
-    #ret2,global_otsu_inv = cv2.threshold(th3, 128, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-
-    ## Compute background image
-    ## actually intended for extracting background from movies.
-#    fgbg = cv2.createBackgroundSubtractorMOG2()
-#    fgbg.apply(img)
-#    img_bg = fgbg.getBackgroundImage()
-
     ## OTSU thresholding to binary mask
-    ret2,img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-#    ret, res = cv2.threshold(np.ravel(blur), 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    thres = np.int_(ret2)
-    print ret
-    print "OTSU thres = {:d}".format(thres)
-    global_otsu = np.copy(img)
+    if threshold is None:
+        print "OTSU thresholding"
+        ret,img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    else:
+        ret,img = cv2.threshold(img,threshold,255,cv2.THRESH_BINARY)
+    thres = np.int_(ret)
+    print "thres = {:d}".format(thres)
+    img_bin = np.copy(img)
 
     ## opening/closing operations
-    kernel = np.ones((3,3), np.uint8)
+    kernel = np.ones((3,3), np.uint8) # smoothing kernel
     img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-    opening = np.copy(img)
+    #img_opening = np.copy(img)
     img = cv2.erode(img, kernel, iterations = 1)
-    closing = np.copy(img)
+    #img_closing = np.copy(img)
     img = cv2.dilate(img, kernel, iterations = 1)
-    img_inv = np.copy(img)
+    img_morph = np.copy(img)
 
     ## find connected components
     ncomp, labels = cv2.connectedComponents(img)
@@ -229,8 +190,10 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     pointsperbox=[]
     for n in np.arange(ncomp):
         idx = (labels == n)
+        # pixels coordinates for the label
         points = np.transpose([X[idx],Y[idx]])
         pointsperbox.append(len(points))
+
         # upright rectangles
         bb = cv2.boundingRect(points)
         boundingboxes_upright.append(bb)
@@ -293,8 +256,9 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     for n in np.arange(ncomp):
         idx = (labels == n)
         eimg[idx] = scores[n]
-    nz = len(eimg > 0.)
-    print "nz = {:d}    sparcity index = {:.2e}".format(nz, float(nz)/len(np.ravel(eimg)))
+    nz = np.sum(eimg > 0.)
+    ntot = len(np.ravel(eimg))
+    print "nz = {:d} / {:d}    sparcity index = {:.2e}".format(nz, ntot, float(nz)/float(ntot))
     efname = bname
     #efile = os.path.join(outputdir,efname+'.txt')
     #efile = os.path.join(outputdir,efname+'.pkl')
@@ -315,11 +279,16 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
         from matplotlib.path import Path
         import matplotlib.collections
         from matplotlib.gridspec import GridSpec
+
+        ## rescale dynamic range linearly
+        img_base = np.array(img8, dtype=np.float_)/255.
+        img_base = (img_base - np.min(img_base))/(np.max(img_base)-np.min(img_base))
+        img_base = np.array(img_base*255, dtype=np.uint8)
         ncolors=(20-1)
         labels_iterated = np.uint8(labels - np.int_(labels / ncolors) * ncolors) + 1
-        images = [img0, img_bg, img_subtracted, blur, global_otsu, img_inv, labels_iterated,eimg]
-        titles = ['original','Background', 'Bg. subtr.','gaussian blur','otsu (thres = {:d})'.format(thres),'closing/opening','bounding box','estimator']
-        cmaps=['gray','gray','gray','gray','gray','gray','tab20c','viridis']
+        images = [img_base, img_bin, img_morph, labels_iterated, eimg]
+        titles = ['original','binary (thres = {:d})'.format(thres),'closing/opening','bounding box','estimator']
+        cmaps=['gray','gray','gray','tab20c','viridis']
         nfig=len(images)
         nrow = int(np.ceil(np.sqrt(nfig)))
         ncol = nfig/nrow

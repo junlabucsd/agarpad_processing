@@ -164,13 +164,44 @@ def get_tiff2ndarray(tiff_file,channel=0,metadata=False, normalize=True):
     else:
         return arr
 
-def get_OTSU(tiff_files, outputdir='.', write=True):
+def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
     """
     Read the input list of files and compute the OTSU threshold (normalized between 0 and 1).
     The result is written in the output directory.
+    NMAX is the maximum memory in bytes allowed (default to 5 Gb)
     """
+    # get dimensions of one image and adjust cropping
+    w0=None
+    w1=None
+    h0=None
+    h1=None
+    nfiles = len(tiff_files)
+    img = get_tiff2ndarray(tiff_files[0],channel=None)
+    shape = img.shape
+    if len(shape) != 3:
+        raise ValueError("Wrong format for image!")
+    nchannels, height, width = shape
+    nbytes = img.nbytes
+    nbytes_maxperimg = NBYTESMAX / nfiles
+    print "nbytes = {:,d}  nbytes_MAX = {:,d}  nbytes_MAXPERIMG = {:,d}".format(nbytes,NBYTESMAX, nbytes_maxperimg)
+    if (nbytes_maxperimg < nbytes):
+        width_new = np.int_(width*np.sqrt(float(nbytes_maxperimg)/nbytes))
+        height_new = np.int_(height*np.sqrt(float(nbytes_maxperimg)/nbytes))
+        w0 = max((width-width_new)/2,0)
+        w1 = min(w0 + width_new, width-1)
+        w0 = min(w0,width-1)
+        w1 = max(w1, 0)
+        w1 += 1
+        h0 = max((height-height_new)/2,0)
+        h1 = min(h0 + height_new, height-1)
+        h0 = min(h0,height-1)
+        h1 = max(h1, 0)
+        h1 += 1
+        print "w0 = {:d}  w1 = {:d}  h0 = {:d}  h1 = {:d}".format(w0,w1,h0,h1)
+        print "width_new / width = {:.0f} %  height_new / height = {:.0f} %".format(100.*float(width_new)/width,100.*float(height_new)/height)
+
     # make data arrays per channels
-    data = np.array([get_tiff2ndarray(t,channel=None) for t in tiff_files])
+    data = np.array([get_tiff2ndarray(t,channel=None)[:,w0:w1,h0:h1] for t in tiff_files])
     nfiles, nchannels, height, width = data.shape
     data = np.moveaxis(data, source=1, destination=0)
     data = np.reshape(data, (nchannels, nfiles*height*width))
@@ -178,6 +209,7 @@ def get_OTSU(tiff_files, outputdir='.', write=True):
     # scale to 8-bit
     norm = float(2**8-1)
     data = np.array(norm*data, dtype=np.uint8)
+    #print data.shape
 
     # compute threshold per channel
     thresholds = []

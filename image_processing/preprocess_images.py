@@ -42,7 +42,7 @@ def default_parameters():
 
     return params
 
-def get_background_checker(img, size=65):
+def get_background_checkerboard(img, size=65):
     """
     Compute background of an image and return it
     """
@@ -175,7 +175,7 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
 
     # method for background subtraction
     #get_background = get_background_medianblur # does not work well
-    get_background = get_background_checker
+    get_background = get_background_checkerboard
 
     # pre-processing
     bname = os.path.splitext(os.path.basename(tiff_file))[0]
@@ -256,10 +256,10 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
         print "Debug for preprocess images"
         img_bg_post = np.zeros(shape, dtype=dtype)
         for c in range(nchannel):
-            print "c = {:d}".format(c)
+#            print "c = {:d}".format(c)
             img_bg_post[c] = get_background(img[c], size=bg_size)
-            print np.unique(img[c])
-            print np.unique(img_bg_post[c])
+#            print np.unique(img[c])
+#            print np.unique(img_bg_post[c])
         debugdir = os.path.join(outputdir,'debug')
         if not os.path.isdir(debugdir):
             os.makedirs(debugdir)
@@ -313,6 +313,7 @@ if __name__ == "__main__":
     namespace = parser.parse_args(sys.argv[1:])
 
     # output directory
+    rootdir = os.getcwd()
     outputdir = namespace.outputdir
     if (outputdir is None):
         outputdir = os.getcwd()
@@ -346,6 +347,15 @@ if __name__ == "__main__":
         if test:
             tiff_files.append(f)
     ntiffs = len(tiff_files)
+    if ntiffs == 0:
+        raise ValueError("No tiff detected!")
+
+    # copy metadata
+    tiffdir=os.path.dirname(os.path.relpath(tiff_files[0], rootdir))
+    metadata=os.path.join(tiffdir,'metadata.txt')
+    dest = os.path.join(outputdir,os.path.basename(metadata))
+    if (os.path.realpath(metadata) != os.path.realpath(dest)):
+        shutil.copy(metadata,dest)
 
     # debug or not
     if namespace.debug:
@@ -353,7 +363,6 @@ if __name__ == "__main__":
 
     params=allparams['preprocess_images']
 
-    rootdir = os.getcwd()
     for f in tiff_files:
         pf=preprocess_image(f, outputdir=outputdir, debug=namespace.debug, **params)
         pf = os.path.relpath(pf,rootdir)
