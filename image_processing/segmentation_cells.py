@@ -154,15 +154,21 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     img = get_tiff2ndarray(tiff_file, channel=channel)
     #img0 = np.copy(img)
 
-    # convert to 8-bit image (Open CV requirement for OTSU)
-    img = np.array(255*img,np.uint8)
-    img8 = np.copy(img)
-
-    ## OTSU thresholding to binary mask
+    ## thresholding to binary mask
     if threshold is None:
         print "OTSU thresholding"
+        # rescale dynamic range linearly (important for OTSU)
+        img = (img - np.min(img))/(np.max(img)-np.min(img))
+        # convert to 8-bit image (Open CV requirement for OTSU)
+        img = np.array(255*img,np.uint8)
+        img8 = np.copy(img)
+        # OTSU threshold
         ret,img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     else:
+        # convert to 8-bit image (Open CV requirement for OTSU)
+        img = np.array(255*img,np.uint8)
+        img8 = np.copy(img)
+        # input threshold
         ret,img = cv2.threshold(img,threshold,255,cv2.THRESH_BINARY)
     thres = np.int_(ret)
     print "thres = {:d}".format(thres)

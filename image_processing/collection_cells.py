@@ -346,7 +346,8 @@ if __name__ == "__main__":
             # fluorescence
             val = img[:,mask]
             cell['fluorescence']={}
-            cell['fluorescence']['background']=channel_bg
+            #cell['fluorescence']['background']=channel_bg  # old version (wrong)
+            cell['fluorescence']['background']=channel_bg*len(points)
             cell['fluorescence']['total']=np.sum(val,axis=1)
 
             # id

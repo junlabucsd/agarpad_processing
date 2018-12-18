@@ -148,12 +148,17 @@ def get_background_medianblur(img, size=201):
     dtype = img.dtype
     norm = get_img_norm(dtype)
 
-    if (norm != 255):
-        img8_bg = cv2.medianBlur(np.array(255 * (np.float_(img) / norm), dtype=np.uint8), ksize=size)
-        bg = np.array(norm*(np.float_(img8_bg) / 255), dtype=dtype)
-    else:
-        bg = cv2.medianBlur(img, ksize=size)
+    myimg = np.array(img, dtype=np.float32)
+    imin = np.min(myimg)
+    imax = np.max(myimg)
+    myimg = (myimg - imin) / (imax - imin)
+    myimg = np.array(255*myimg, dtype=np.uint8)
+    bg = cv2.medianBlur(myimg, ksize=size)
+
     bg = cv2.blur(bg,ksize=(size,size)) # maybe not essential, to smooth background values
+    bg = np.array(bg, dtype=np.float32)/255
+    bg = (imax - imin)* bg + imin
+    bg = np.array(bg, dtype=img.dtype)
 
     return bg
 
@@ -168,14 +173,19 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
       * inverting some channels (namely for phase contrast)
       * subtracting the background.
 
+    NOTE:
+      * open CV functions seem not to work very well on images (i) other than 8-bits and (ii) with small dynamic range.
+        Thus I convert all images to 8-bits, and I scale the dynamic range before processing. The DNR is scaled back to the
+        correct range at the end.
+
     USEFUL DOCUMENTATION:
       * https://docs.opencv.org/2.4/modules/imgproc/doc/filtering.html
       * https://docs.opencv.org/3.4/d7/d4d/tutorial_py_thresholding.html
     """
 
     # method for background subtraction
-    #get_background = get_background_medianblur # does not work well
-    get_background = get_background_checkerboard
+    get_background = get_background_medianblur
+    #get_background = get_background_checkerboard
 
     # pre-processing
     bname = os.path.splitext(os.path.basename(tiff_file))[0]

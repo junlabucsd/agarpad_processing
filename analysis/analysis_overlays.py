@@ -61,6 +61,130 @@ def default_parameters():
     mydict['mode']='total_fl'  # alternative value is \'concentration\'
     return params
 
+def hist_dimensions(celldicts, labels, outputdir='.', bins=['auto','auto'], colors=['darkblue','darkgreen'], units_dx=[None, None, None, None], title=None, mode='um',qcut=0):
+    """
+    Make an histogram of the signal obtained per cell.
+    """
+
+    # initialization
+    if mode == 'um':
+        titles = [u'length (\u03BCm)', u'width (\u03BCm)', u'area (\u03BCm\u00B2)', u'volume (\u03BCm\u00B3)']
+        attrs = ['height_um','width_um','area_um2', 'volume_um3']
+    else:
+        titles = [u'length (px)', u'width (px)', u'area (px\u00B2)', u'volume (px\u00B3)']
+        attrs = ['height','width','area', 'volume']
+
+    nattrs = len(attrs)
+    if len(units_dx) != nattrs:
+        raise ValueError("units_dx has the wrong dimensions!")
+
+    # filling up the data
+    ndata = len(celldicts)
+    if ndata == 0:
+        raise ValueError("Empty input data")
+    print "ndata = {:d}".format(ndata)
+    if len(bins) != ndata:
+        raise ValueError("bins has the wrong dimensions!")
+    if len(colors) != ndata:
+        raise ValueError("colors has the wrong dimensions!")
+
+    data=[]
+    for i in range(ndata):
+        cells = celldicts[i]
+        ncells = len(cells)
+        if ncells == 0:
+            raise ValueError("Empty cell dictionary!")
+
+        # make lists
+        dimensions = [ [] for i in range(nattrs)]
+        keys = cells.keys()
+        for n in range(ncells):
+            key = keys[n]
+            cell = cells[key]
+            for i in range(nattrs):
+                attr = attrs[i]
+                dimensions[i].append(cell[attr])
+
+        dimensions = np.array(dimensions)
+
+        data.append(dimensions)
+    # end loop on data sets
+
+    Ns = [len(d) for d in data]
+    mus = [np.mean(d, axis=1).astype(d.dtype) for d in data]
+    meds = [np.median(d, axis=1).astype(d.dtype) for d in data]
+    sigs = [np.std(d, axis=1).astype(d.dtype) for d in data]
+    errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=(4*nattrs,3))
+    gs = mgs.GridSpec(1,nattrs)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for j in range(1,nattrs):
+        #ax = fig.add_subplot(gs[0,j],sharey=ax0)
+        ax = fig.add_subplot(gs[0,j])
+        axes.append(ax)
+
+    for j in range(nattrs):
+        attr = attrs[j]
+        print "attr = {}".format(attr)
+        ax = axes[j]
+
+        for i in range(ndata):
+            # compute histogram
+            d = data[i][j]
+            N = len(d)
+            d = np.sort(d)
+            n0 = int(qcut*float(N))
+            n1 = min(int((1.-qcut)*float(N)),N-1)
+            d = d[n0:n1+1]
+            hist,edges = np.histogram(d, bins=bins[i], density=True)
+            print "{:2s}nbins = {:,d}".format("",len(edges)-1)
+
+            # plot histogram
+            color = colors[i]
+            #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
+            if j == 0:
+                label = labels[i]
+            else:
+                label = None
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+        # end loop
+    # end loop
+
+        # add legends
+        ax.set_title(titles[j], fontsize='large')
+        #ax.annotate(fmts[i].format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+
+        # adjust the axis
+        if (j == 0):
+            ax.legend(loc='best',fontsize="medium",frameon=False)
+        #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+        ax.tick_params(length=4)
+        ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+
+        if not (units_dx[j] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[j]))
+
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    gs.tight_layout(fig)
+    if mode == 'um':
+        filename = 'analysis_overlay_dimensions_um'
+    else:
+        filename = 'analysis_overlay_dimensions_px'
+
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
+
 def hist_channel(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], channel=0, colors=[None,None,None], units_dx=None, title=None, mode='total',qcut=0):
     """
     Make an histogram of the signal obtained per cell.
@@ -255,10 +379,11 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
 
     # adjust the axis
     ax.legend(loc='best',fontsize="medium",frameon=False)
-    ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+    #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
     ax.tick_params(length=4)
     ax.tick_params(axis='both', labelsize='medium')
-    ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+    ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+    ax.set_ylim(0.,None)
 
     if not (units_dx is None):
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx))
@@ -266,6 +391,7 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
 #        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
 #        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
 
+    ax.spines['left'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
 
@@ -335,13 +461,13 @@ if __name__ == "__main__":
 
     # parameter file
     if namespace.paramfile is None:
-        allparams = default_parameters()
+        params = default_parameters()
         paramfile = "analysis_overlays_default.yml"
         with open(paramfile,'w') as fout:
-            yaml.dump(allparams,fout)
+            yaml.dump(params,fout)
     else:
         paramfile = namespace.paramfile.name
-        allparams = yaml.load(namespace.paramfile)
+        params = yaml.load(namespace.paramfile)
 
     dest = os.path.join(outputdir, os.path.basename(paramfile))
     if (os.path.realpath(dest) != os.path.realpath(paramfile)):
@@ -349,10 +475,12 @@ if __name__ == "__main__":
     paramfile = dest
 
     # make queen analysis
-    params=allparams['analysis_overlays']
     if 'hist_queen' in params:
         hist_queen(celldicts, labels, outputdir=outputdir, **params['hist_queen'])
 
     if 'hist_channel' in params:
         for channel in params['hist_channel']['channels']:
             hist_channel(celldicts, labels, outputdir=outputdir, channel=channel, **params['hist_channel']['args'])
+
+    if 'hist_dimensions' in params:
+        hist_dimensions(celldicts, labels, outputdir=outputdir, **params['hist_dimensions'])

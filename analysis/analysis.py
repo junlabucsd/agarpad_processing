@@ -41,9 +41,15 @@ def default_parameters():
 
     print "Loading default parameters"
     params={}
-    # filtering - select only a subset
+    # dimensions
+    params['dimensions']={}
+    mydict = params['dimensions']
+    mydict['bins'] = ['auto', 'auto', 'auto', 'auto']
+    mydict['units_dx']=[None, None, None, None]
+    mydict['mode']='um'
+    # queen
     params['queen']={}
-    mydict = params['analysis_queen']
+    mydict = params['queen']
     mydict['channels'] = [0,1]
     mydict['bins'] = [16, 16, 16]
     mydict['titles'] = ['390 ex', '475 ex', 'QUEEN']
@@ -52,6 +58,111 @@ def default_parameters():
     mydict['mode']='total_fl'  # alternative value is \'concentration_fl\'
 
     return params
+
+def hist_dimensions(cells, outputdir='.', bins=['auto','auto','auto','auto'], units_dx=[None, None, None, None], mode='um'):
+    """
+    Plot the histograms for several cell dimensions
+    """
+
+    # initialization
+    if mode == 'um':
+        titles = [u'length (\u03BCm)', u'width (\u03BCm)', u'area (\u03BCm\u00B2)', u'volume (\u03BCm\u00B3)']
+        attrs = ['height_um','width_um','area_um2', 'volume_um3']
+    else:
+        titles = [u'length (px)', u'width (px)', u'area (px\u00B2)', u'volume (px\u00B3)']
+        attrs = ['height','width','area', 'volume']
+
+    nattrs = len(attrs)
+    if len(bins) != nattrs:
+        raise ValueError("bins has the wrong dimensions!")
+    if len(units_dx) != nattrs:
+        raise ValueError("units_dx has the wrong dimensions!")
+    ncells = len(cells)
+
+    if ncells == 0:
+        raise ValueError("Empty cell dictionary!")
+
+    pfmt = "$\\mu = {mu:,.2f}$\n$\\sigma = {sig:,.2f}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,.2f}$"
+
+    # make lists
+    data = [ [] for i in range(nattrs)]
+    keys = cells.keys()
+    for n in range(ncells):
+        key = keys[n]
+        cell = cells[key]
+        for i in range(nattrs):
+            attr = attrs[i]
+            data[i].append(cell[attr])
+
+    data = np.array(data)
+
+    # make plot
+    x,N = data.shape
+    mus = [np.mean(d).astype(d.dtype) for d in data]
+    meds = [np.median(d).astype(d.dtype) for d in data]
+    sigs = [np.std(d).astype(d.dtype) for d in data]
+    errs = [s/np.sqrt(N) for s in sigs]
+
+    fig = plt.figure(num=None, facecolor='w', figsize=(nattrs*4,3))
+    gs = mgs.GridSpec(1,nattrs)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for i in range(1,nattrs):
+        ax = fig.add_subplot(gs[0,i],sharey=ax0)
+        axes.append(ax)
+
+    for i in range(nattrs):
+        attr = attrs[i]
+        print "attr = {}".format(attr)
+        ax = axes[i]
+
+        # compute histogram
+        hist,edges = np.histogram(data[i], bins=bins[i], density=False)
+        nbins = len(edges)-1
+        print "nbins = {:d}".format(nbins)
+
+        # plot histogram
+        color = 'k'
+        ax.bar(edges[:-1], hist, np.diff(edges), facecolor=color, lw=0)
+
+        # add legends
+        ax.set_title(titles[i], fontsize='large')
+        ax.annotate(pfmt.format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+
+        # adjust the axis
+        ax.tick_params(length=4)
+        if (i==0):
+            ax.set_ylabel("count",fontsize="medium",labelpad=10)
+            ax.tick_params(axis='both', labelsize='medium')
+        else:
+            ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+
+        if not (units_dx[i] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[i]))
+#        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+#        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
+#        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+#        ax.set_xlim(xmin,xmax)
+#        ax.set_ylim(xmin,xmax)
+#        ax.set_aspect(aspect='equal', adjustable='box')
+
+    gs.tight_layout(fig, w_pad=1.0)
+    if mode == 'um':
+        filename = 'analysis_dimensions_um'
+    else:
+        filename = 'analysis_dimensions_px'
+
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
 
 def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['I1','I2','QUEEN'], channels=[0,1], colors=['darkblue', 'darkgreen', 'darkblue'], units_dx=[None, None, None], mode='total_fl'):
     """
@@ -130,6 +241,8 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
 
         # compute histogram
         hist,edges = np.histogram(data[i], bins=bins[i], density=False)
+        nbins = len(edges)-1
+        print "nbins = {:d}".format(nbins)
 
         # plot histogram
         color = colors[i]
@@ -175,7 +288,7 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
 
 #################### main ####################
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Analysis tool -- QUEEN indicator.")
+    parser = argparse.ArgumentParser(prog="Analysis tool.")
     parser.add_argument('cellfile',  type=str, help='Path to a cell dictionary in json format.')
     parser.add_argument('-f', '--paramfile',  type=file, required=False, help='Yaml file containing parameters.')
     parser.add_argument('-d', '--outputdir',  type=str, required=False, help='Output directory')
@@ -200,8 +313,7 @@ if __name__ == "__main__":
         outputdir = os.path.dirname(cellfile)
     else:
         outputdir = os.path.relpath(outputdir, os.getcwd())
-    rootdir = os.path.join(outputdir,'analysis')
-    outputdir = os.path.join(rootdir,'queen')
+    outputdir = os.path.join(outputdir,'analysis')
     if not os.path.isdir(outputdir):
         os.makedirs(outputdir)
     print "{:<20s}{:<s}".format("outputdir", outputdir)
@@ -209,7 +321,7 @@ if __name__ == "__main__":
     # parameter file
     if namespace.paramfile is None:
         allparams = default_parameters()
-        paramfile = "analysis_queen.yml"
+        paramfile = "analysis.yml"
         with open(paramfile,'w') as fout:
             yaml.dump(allparams,fout)
     else:
@@ -220,7 +332,19 @@ if __name__ == "__main__":
     if (os.path.realpath(dest) != os.path.realpath(paramfile)):
         shutil.copy(paramfile,dest)
     paramfile = dest
+    # dimensions
+    if 'dimensions' in allparams:
+        mydir = os.path.join(outputdir,'dimensions')
+        if not os.path.isdir(mydir):
+            os.makedirs(mydir)
+        print "{:<20s}{:<s}".format("outputdir", mydir)
+        hist_dimensions(cells, outputdir=mydir, **allparams['dimensions'])
 
     # make queen analysis
-    make_plot_queen(cells, outputdir=outputdir, **allparams['analysis_queen'])
+    if 'queen' in allparams:
+        mydir = os.path.join(outputdir,'queen')
+        if not os.path.isdir(mydir):
+            os.makedirs(mydir)
+        print "{:<20s}{:<s}".format("outputdir", mydir)
+        make_plot_queen(cells, outputdir=mydir, **allparams['queen'])
 
