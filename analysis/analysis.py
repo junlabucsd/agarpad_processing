@@ -123,7 +123,7 @@ def hist_dimensions(cells, outputdir='.', bins=['auto','auto','auto','auto'], un
         print "nbins = {:d}".format(nbins)
 
         # plot histogram
-        color = 'k'
+        color = 'grey'
         ax.bar(edges[:-1], hist, np.diff(edges), facecolor=color, lw=0)
 
         # add legends
@@ -156,6 +156,153 @@ def hist_dimensions(cells, outputdir='.', bins=['auto','auto','auto','auto'], un
         filename = 'analysis_dimensions_um'
     else:
         filename = 'analysis_dimensions_px'
+
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
+
+def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, mode='total',qcut=0, bg_val=None):
+    """
+    Make an histogram of the signal obtained per cell.
+    """
+
+    # initialization
+    if mode == 'concentration_fl':
+        print "concentration_fl mode"
+        fl_dtype = np.float_
+        fmt = "$\\mu = {mu:,.2f}$\n$\\sigma = {sig:,.2f}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,.2f}$"
+    elif mode == 'total_fl':
+        print "total_fl mode"
+        fl_dtype = np.uint16
+        fmt = "$\\mu = {mu:,d}$\n$\\sigma = {sig:,d}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,d}$"
+    else:
+        raise ValueError('Wrong mode selection: \'total_fl\' or \'concentration_fl\'')
+    data_fl = []
+    data_bg = []
+
+    # filling up the fluorescence
+    cellref = cells.values()[0]
+    nchannel = len(cellref['fluorescence']['total'])
+
+    if bins is None:
+        bins = ['auto']*nchannel
+    if units_dx is None:
+        units_dx = [None]*nchannel
+    if titles is None:
+        titles = ["channel {:d}".format(i) for i in range(nchannel)]
+
+    for i in range(nchannel):
+        ncells = len(cells)
+        if ncells == 0:
+            raise ValueError("Empty cell dictionary!")
+        FL = []
+        BG = []
+
+        # make lists
+        keys = cells.keys()
+        for n in range(ncells):
+            key = keys[n]
+            cell = cells[key]
+            npx = cell['area']
+            fl = cell['fluorescence']['total']
+            bg_px = cell['fluorescence']['background_px']
+            x = fl[i]
+            bg = bg_px[i]*npx
+            if mode == 'concentration_fl':
+                try:
+                    volume = cell['volume']
+                except KeyError:
+                    raise ValueError('Missing volume attribute in cell!')
+                x = float(x) / float(volume)
+                bg = float(bg) / float(volume)
+            elif mode == 'total_fl':
+                pass
+            FL.append(x)
+            BG.append(bg)
+        # end loop on cells
+        FL = np.array(FL,dtype=fl_dtype)
+        BG = np.array(BG,dtype=fl_dtype)
+        data_fl.append(FL)
+        data_bg.append(BG)
+    # end loop on data sets
+
+    Ns = [len(d) for d in data_fl]
+    mus = [np.mean(d).astype(d.dtype) for d in data_fl]
+    meds = [np.median(d).astype(d.dtype) for d in data_fl]
+    sigs = [np.std(d).astype(d.dtype) for d in data_fl]
+    errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
+    bgs = [np.median(d).astype(d.dtype) for d in data_bg]
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=(nchannel*4,3))
+    gs = mgs.GridSpec(1,nchannel)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for i in range(1,nchannel):
+        ax = fig.add_subplot(gs[0,i],sharey=ax0)
+        axes.append(ax)
+
+    for i in range(nchannel):
+        print "channel = {}".format(i)
+        ax = axes[i]
+
+        # compute histogram
+        d = data_fl[i]
+        N = len(d)
+        d = np.sort(d)
+        n0 = int(qcut*float(N))
+        n1 = min(int((1.-qcut)*float(N)),N-1)
+        d = d[n0:n1+1]
+        hist,edges = np.histogram(d, bins=bins[i], density=False)
+        nbins = len(edges)-1
+        print "nbins = {:d}".format(nbins)
+
+        # plot histogram
+        color = 'grey'
+        ax.bar(edges[:-1], hist, np.diff(edges), facecolor=color, lw=0)
+
+        # add legends
+        ax.set_title(titles[i], fontsize='large')
+        ax.annotate(fmt.format(mu=mus[i],sig=sigs[i], N=len(data_fl[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+        ax.axvline(x=bgs[i], color='r', lw=0.5, ls='--')
+
+        # adjust the axis
+        ax.tick_params(length=4)
+        if (i==0):
+            ax.set_ylabel("count",fontsize="medium",labelpad=10)
+            ax.tick_params(axis='both', labelsize='medium')
+        else:
+            ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+
+        if not (units_dx[i] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[i]))
+#        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+#        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
+#        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+#        ax.set_xlim(xmin,xmax)
+#        ax.set_ylim(xmin,xmax)
+#        ax.set_aspect(aspect='equal', adjustable='box')
+
+        if not (titles[i] is None):
+            ax.set_title(titles[i], fontsize='large')
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+    # end loop
+
+    fig.tight_layout()
+    if mode == 'concentration_fl':
+        filename = 'analysis_concentration_fl'
+    elif mode == 'total_fl':
+        filename = 'analysis_total_fl'
 
     exts=['.pdf', '.svg', '.png']
     for ext in exts:
@@ -339,6 +486,14 @@ if __name__ == "__main__":
             os.makedirs(mydir)
         print "{:<20s}{:<s}".format("outputdir", mydir)
         hist_dimensions(cells, outputdir=mydir, **allparams['dimensions'])
+
+    # make queen analysis
+    if 'fluorescence' in allparams:
+        mydir = os.path.join(outputdir,'fluorescence')
+        if not os.path.isdir(mydir):
+            os.makedirs(mydir)
+        print "{:<20s}{:<s}".format("outputdir", mydir)
+        hist_channels(cells, outputdir=mydir, **allparams['fluorescence'])
 
     # make queen analysis
     if 'queen' in allparams:

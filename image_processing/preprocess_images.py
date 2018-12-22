@@ -293,6 +293,9 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
         for r in range(nrow):
             for c in range(ncol):
                 image = images[c][r]
+                i0 = np.min(image)
+                i1 = np.max(image)
+                image = (np.array(image) - i0)/(i1-i0)
                 ax=fig.add_subplot(gs[r,c])
                 axes.append(ax)
                 cf=ax.imshow(image, cmap=cmaps[c])

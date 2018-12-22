@@ -170,6 +170,7 @@ def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
     The result is written in the output directory.
     NMAX is the maximum memory in bytes allowed (default to 5 Gb)
     """
+    NBYTESMAX=1000000000/10
     # get dimensions of one image and adjust cropping
     w0=None
     w1=None

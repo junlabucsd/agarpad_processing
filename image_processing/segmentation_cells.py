@@ -136,7 +136,7 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
       * (w0,w1): minimum and maximum width for bounding box in pixels.
       * (l0,l1): minimum and maximum length for bounding box in pixels.
       * acut: minimum area/rectangle bounding box ratio.
-      * threshold is a lower threshold (everything below is set to zero). Value must be for the 8-bit image.
+      * threshold is a lower threshold (everything below is set to zero). Value must be a float between 0 and 1. 1 is the maximum, eg. 255 or 65535.
     OUTPUT:
       * 2D matrix of weights corresponding to the probability that a pixel belongs to a cell.
 
@@ -154,22 +154,29 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     img = get_tiff2ndarray(tiff_file, channel=channel)
     #img0 = np.copy(img)
 
+    # rescale dynamic range linearly (important for OTSU)
+    amin = np.min(img)
+    amax = np.max(img)
+    print "amin = {:.1g}    amax = {:.1g}".format(amin,amax)
+    img = (img - amin)/(amax-amin)
+
     ## thresholding to binary mask
     if threshold is None:
         print "OTSU thresholding"
-        # rescale dynamic range linearly (important for OTSU)
-        img = (img - np.min(img))/(np.max(img)-np.min(img))
         # convert to 8-bit image (Open CV requirement for OTSU)
         img = np.array(255*img,np.uint8)
         img8 = np.copy(img)
         # OTSU threshold
         ret,img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     else:
+        th = max((threshold - amin)/(amax-amin),0) # value in rescaled DNR
+        th = np.uint8(255*th) # uint8
+        print "threshold = {:.1g}    th = {:d}".format(threshold,th)
         # convert to 8-bit image (Open CV requirement for OTSU)
         img = np.array(255*img,np.uint8)
         img8 = np.copy(img)
         # input threshold
-        ret,img = cv2.threshold(img,threshold,255,cv2.THRESH_BINARY)
+        ret,img = cv2.threshold(img,th,255,cv2.THRESH_BINARY)
     thres = np.int_(ret)
     print "thres = {:d}".format(thres)
     img_bin = np.copy(img)
