@@ -13,6 +13,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as mgs
 import matplotlib.ticker
+from matplotlib.colors import cnames as colornames
 
 # custom
 origin=os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -61,7 +62,153 @@ def default_parameters():
     mydict['mode']='total_fl'  # alternative value is \'concentration\'
     return params
 
-def hist_channel(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], channel=0, colors=[None,None,None], units_dx=None, title=None, mode='total',qcut=0):
+def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, title=None, mode='um',qcut=0):
+    """
+    Make an histogram of the signal obtained per cell.
+    """
+
+    # initialization
+    if mode == 'um':
+        titles = [u'length (\u03BCm)', u'width (\u03BCm)', u'area (\u03BCm\u00B2)', u'volume (\u03BCm\u00B3)']
+        attrs = ['height_um','width_um','area_um2', 'volume_um3']
+    else:
+        titles = [u'length (px)', u'width (px)', u'area (px\u00B2)', u'volume (px\u00B3)']
+        attrs = ['height','width','area', 'volume']
+
+    nattrs = len(attrs)
+    if len(units_dx) != nattrs:
+        raise ValueError("units_dx has the wrong dimensions!")
+
+    ndata = len(celldicts)
+    if ndata == 0:
+        raise ValueError("Empty input data")
+    print "ndata = {:d}".format(ndata)
+
+    # colors
+    if colors is None:
+        colors = colornames.keys()[:ndata]
+
+    # bins
+    if bins is None:
+        bins={j: None for j in range(nattrs)}
+    for j in range(nattrs):
+        if bins[j] is None:
+            bins[j] = ['auto']*ndata
+
+    # units_dx
+    if units_dx is None:
+        units_dx={i:None for i in range(nattrs)}
+
+    # titles
+    if titles is None:
+        titles=[None for i in range(nattrs)]
+
+    # filling up the data
+    data=[]
+    for i in range(ndata):
+        cells = celldicts[i]
+        ncells = len(cells)
+        if ncells == 0:
+            raise ValueError("Empty cell dictionary!")
+
+        # make lists
+        dimensions = [ [] for i in range(nattrs)]
+        keys = cells.keys()
+        for n in range(ncells):
+            key = keys[n]
+            cell = cells[key]
+            for i in range(nattrs):
+                attr = attrs[i]
+                dimensions[i].append(cell[attr])
+
+        dimensions = np.array(dimensions)
+
+        data.append(dimensions)
+    # end loop on data sets
+
+    Ns = [len(d) for d in data]
+    mus = [np.mean(d, axis=1).astype(d.dtype) for d in data]
+    meds = [np.median(d, axis=1).astype(d.dtype) for d in data]
+    sigs = [np.std(d, axis=1).astype(d.dtype) for d in data]
+    errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=(4*nattrs,3))
+    gs = mgs.GridSpec(1,nattrs)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for j in range(1,nattrs):
+        #ax = fig.add_subplot(gs[0,j],sharey=ax0)
+        ax = fig.add_subplot(gs[0,j])
+        axes.append(ax)
+
+    for j in range(nattrs):
+        attr = attrs[j]
+        print "attr {:d} / {:d}".format(j,nattrs-1)
+        ax = axes[j]
+
+        for i in range(ndata):
+            print "{:<2s}data {:d} / {:d}".format("", i, ndata-1)
+            # compute histogram
+            d = data[i][j]
+            N = len(d)
+            d = np.sort(d)
+            n0 = int(qcut*float(N))
+            n1 = min(int((1.-qcut)*float(N)),N-1)
+            d = d[n0:n1+1]
+            print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
+            hist,edges = np.histogram(d, bins=bins[j][i], density=True)
+            print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
+
+            # plot histogram
+            color = colors[i]
+            #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
+            if j == 0:
+                label = labels[i]
+            else:
+                label = None
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+        # end loop
+    # end loop
+
+
+        # add legends
+        if not (titles[j] is None):
+            ax.set_title(titles[j], fontsize='large')
+        #ax.annotate(fmts[i].format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+
+        # adjust the axis
+        if (j == 0):
+            ax.legend(loc='best',fontsize="medium",frameon=False)
+        #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+        ax.tick_params(length=4)
+        ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+
+        if not (units_dx[j] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[j]))
+#        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+#        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
+#        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    gs.tight_layout(fig)
+    if mode == 'um':
+        filename = 'analysis_overlay_dimensions_um'
+    else:
+        filename = 'analysis_overlay_dimensions_px'
+
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
+
+def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None):
     """
     Make an histogram of the signal obtained per cell.
     """
@@ -77,97 +224,164 @@ def hist_channel(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], 
         fmt = "$\\mu = {mu:,d}$\n$\\sigma = {sig:,d}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,d}$"
     else:
         raise ValueError('Wrong mode selection: \'total_fl\' or \'concentration_fl\'')
-    data = []
 
-    # filling up the data
+    # input data
     ndata = len(celldicts)
     if ndata == 0:
         raise ValueError("Empty input data")
+    if ndata != len(labels):
+        raise ValueError("Labels should have the same dimension as cell dicts")
     print "ndata = {:d}".format(ndata)
 
-    for i in range(ndata):
-        cells = celldicts[i]
-        ncells = len(cells)
-        if ncells == 0:
-            raise ValueError("Empty cell dictionary!")
-        FL = []
+    # channels
+    nchannel = len(celldicts[0].values()[0]['fluorescence']['total'])
+    print "nchannel = {:d}".format(nchannel)
 
-        # make lists
-        keys = cells.keys()
-        for n in range(ncells):
-            key = keys[n]
-            cell = cells[key]
-            fl = cell['fluorescence']['total']
-            bg = cell['fluorescence']['background']
-            x = fl[channel]-bg[channel]
-            if mode == 'concentration_fl':
-                try:
-                    volume = cell['volume']
-                except KeyError:
-                    raise ValueError('Missing volume attribute in cell!')
-                x = float(x) / volume
-            elif mode == 'total_fl':
-                pass
-            FL.append(x)
-        # end loop on cells
-        FL = np.array(FL,dtype=fl_dtype)
-        data.append(FL)
-    # end loop on data sets
+    # colors
+    if colors is None:
+        colors = colornames.keys()[:ndata]
 
-    Ns = [len(d) for d in data]
-    mus = [np.mean(d).astype(d.dtype) for d in data]
-    meds = [np.median(d).astype(d.dtype) for d in data]
-    sigs = [np.std(d).astype(d.dtype) for d in data]
-    errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
+    # bins
+    if bins is None:
+        bins={i: None for i in range(nchannel)}
+    for c in range(nchannel):
+        if bins[c] is None:
+            bins[c] = ['auto']*ndata
 
-    print meds
+    # units_dx
+    if units_dx is None:
+        units_dx={i:None for i in range(nchannel)}
+
+    # titles
+    if titles is None:
+        titles=[None for i in range(nchannel)]
+
+    # xminxmax
+    if xminxmax is None:
+        xminxmax=[[None, None] for i in range(nchannel)]
+
+    # filling up the data
+    data = [[] for c in range(nchannel)]
+    data_bg = [[] for c in range(nchannel)]
+    for c in range(nchannel):
+        for i in range(ndata):
+            cells = celldicts[i]
+            ncells = len(cells)
+            if ncells == 0:
+                raise ValueError("Empty cell dictionary!")
+            FL = []
+            BG = []
+
+            # make lists
+            keys = cells.keys()
+            for n in range(ncells):
+                key = keys[n]
+                cell = cells[key]
+                npx = cell['area']
+                fl = cell['fluorescence']['total']
+                bg_px = cell['fluorescence']['background_px']
+                x = fl[c]
+                bg = bg_px[c]*npx
+                if mode == 'concentration_fl':
+                    try:
+                        volume = cell['volume']
+                    except KeyError:
+                        raise ValueError('Missing volume attribute in cell!')
+                    x = float(x) / volume
+                    bg = float(bg) / float(volume)
+                elif mode == 'total_fl':
+                    pass
+                FL.append(x)
+                BG.append(bg)
+            # end loop on cells
+            FL = np.array(FL,dtype=fl_dtype)
+            BG = np.array(BG,dtype=fl_dtype)
+            data[c].append(FL)
+            data_bg[c].append(BG)
+        # end loop on data sets
+    # end loop on channels
+
+#    Ns = [len(d) for d in data]
+#    mus = [np.mean(d).astype(d.dtype) for d in data]
+#    meds = [np.median(d).astype(d.dtype) for d in data]
+#    sigs = [np.std(d).astype(d.dtype) for d in data]
+#    errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
+    if backgrounds is None:
+        bgcolor='r'
+        bgs = [np.nanmedian(np.concatenate(data_bg[c])).astype(data_bg[c][0].dtype) for c in range(nchannel)]
+    else:
+        bgcolor='g'
+        bgs = [np.float_(backgrounds[c]) for c in range(nchannel)]
+
     # make figure
-    fig = plt.figure(num=None, facecolor='w', figsize=(4,3))
-    ax = fig.gca()
-    for i in range(ndata):
-        # compute histogram
-        d = data[i]
-        N = len(d)
-        d = np.sort(d)
-        n0 = int(qcut*float(N))
-        n1 = min(int((1.-qcut)*float(N)),N-1)
-        d = d[n0:n1+1]
-        hist,edges = np.histogram(d, bins=bins[i], density=True)
-        print "nbins = {:,d}".format(len(edges)-1)
+    fig = plt.figure(num=None, facecolor='w', figsize=(4*nchannel,3))
+    gs = mgs.GridSpec(1,nchannel)
 
-        # plot histogram
-        color = colors[i]
-        #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
-        ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=labels[i])
-    # end loop
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for c in range(1,nchannel):
+        ax = fig.add_subplot(gs[0,c])
+        axes.append(ax)
 
-    # add legends
-    if not (title is None):
-        ax.set_title(title, fontsize='large')
-    #ax.annotate(fmts[i].format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+    for c in range(nchannel):
+        print "channel = {:d} / {:d}".format(c,nchannel-1)
+        ax=axes[c]
+        for i in range(ndata):
+            print "{:<2s}data {:d} / {:d}".format("", i, ndata-1)
+            # compute histogram
+            d = data[c][i]
+            N = len(d)
+            d = np.sort(d)
+            n0 = int(0.5*qcut*float(N))
+            print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
+            n1 = N - n0
+#            print n0, n1
+            d = d[n0:n1]
+            hist,edges = np.histogram(d, bins=bins[c][i], density=True)
+            print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
 
-    # adjust the axis
-    ax.legend(loc='best',fontsize="medium",frameon=False)
-    ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
-    ax.tick_params(length=4)
-    ax.tick_params(axis='both', labelsize='medium')
-    ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+            # plot histogram
+            color = colors[i]
+            #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
+            if (c ==0):
+                label=labels[i]
+            else:
+                label=None
 
-    if not (units_dx is None):
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx))
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+            # end loop on data
+
+        # plot background
+        ax.axvline(x=bgs[c], color=bgcolor, lw=0.5, ls='--')
+
+        # add legends
+        if not (titles[c] is None):
+            ax.set_title(titles[c], fontsize='large')
+
+        # adjust the axis
+        if (c == 0):
+            ax.legend(loc='best',fontsize="medium",frameon=False)
+        #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+        ax.tick_params(length=4)
+        ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+
+        if not (units_dx[c] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[c]))
 #        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
 #        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
 #        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
 
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
+        ax.set_xlim(xminxmax[c])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+    # end loop on channels
 
-    fig.tight_layout()
+    gs.tight_layout(fig)
     if mode == 'concentration_fl':
         filename = 'analysis_overlay_concentration_fl'
     elif mode == 'total_fl':
         filename = 'analysis_overlay_total_fl'
-    filename += "_c{:d}".format(channel)
 
     exts=['.pdf', '.svg', '.png']
     for ext in exts:
@@ -176,7 +390,237 @@ def hist_channel(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], 
         print "Fileout: {:<s}".format(fileout)
     return
 
-def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], channels=[0,1], colors=['darkblue', 'darkgreen', 'darkblue'], units_dx=None,qcut=0):
+def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None):
+    """
+    Make an histogram of the signal obtained per cell for the fluorescence channels used to measure the Queen ratio. Also plot the distribution of the Queen ratio.
+    """
+
+    # initialization
+    if mode == 'concentration_fl':
+        print "concentration_fl mode"
+        fl_dtype = np.float_
+        fmt = "$\\mu = {mu:,.2f}$\n$\\sigma = {sig:,.2f}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,.2f}$"
+    elif mode == 'total_fl':
+        print "total_fl mode"
+        fl_dtype = np.uint16
+        fmt = "$\\mu = {mu:,d}$\n$\\sigma = {sig:,d}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,d}$"
+    else:
+        raise ValueError('Wrong mode selection: \'total_fl\' or \'concentration_fl\'')
+
+    # input data
+    ndata = len(celldicts)
+    if ndata == 0:
+        raise ValueError("Empty input data")
+    if ndata != len(labels):
+        raise ValueError("Labels should have the same dimension as cell dicts")
+    print "ndata = {:d}".format(ndata)
+
+    # channels
+    nchannel = 2
+    c1 = channels[0]
+    c2 = channels[1]
+    print "nchannel = {:d}, c1 = {:d}, c2 = {:d}".format(nchannel, c1, c2)
+    nplot = nchannel + 1
+
+    # colors
+    if colors is None:
+        colors = colornames.keys()[:ndata]
+
+    # bins
+    if bins is None:
+        bins={i: None for i in range(nplot)}
+    for c in range(nplot):
+        if bins[c] is None:
+            bins[c] = ['auto']*ndata
+
+    # units_dx
+    if units_dx is None:
+        units_dx={i:None for i in range(nplot)}
+
+    # titles
+    if titles is None:
+        titles=[None for i in range(nplot)]
+
+    # xminxmax
+    if xminxmax is None:
+        xminxmax=[[None, None] for i in range(nplot)]
+
+    # filling up the data
+    data_I1 = []
+    data_I2 = []
+    data_BG1 = []
+    data_BG2 = []
+    data_queen = []
+    for i in range(ndata):
+        cells = celldicts[i]
+        ncells = len(cells)
+        if ncells == 0:
+            raise ValueError("Empty cell dictionary!")
+        FL1 = []
+        FL2 = []
+        BG1 = []
+        BG2 = []
+        QUEEN = []
+
+        # make lists
+        keys = cells.keys()
+        for n in range(ncells):
+            key = keys[n]
+            cell = cells[key]
+            npx = cell['area']
+            fl = cell['fluorescence']['total']
+            bg_px = cell['fluorescence']['background_px']
+            x1 = fl[c1]
+            x2 = fl[c2]
+            bg_x1 = bg_px[c1]*npx
+            bg_x2 = bg_px[c2]*npx
+            if mode == 'concentration_fl':
+                try:
+                    volume = cell['volume']
+                except KeyError:
+                    raise ValueError('Missing volume attribute in cell!')
+                x1 = float(x1) / volume
+                x2 = float(x2) / volume
+                if backgrounds is None:
+                    bg_x1 = float(bg_x1) / volume
+                    bg_x2 = float(bg_x2) / volume
+                else:
+                    bg_x1  = backgrounds[c1]
+                    bg_x2  = backgrounds[c2]
+            elif mode == 'total_fl':
+                sys.exit("Not programmed yet!")
+                pass
+            z = ((float(x1) -  float(bg_x1)) / (float(x2) - float(bg_x2)) )
+            FL1.append(x1)
+            FL2.append(x2)
+            BG1.append(bg_x1)
+            BG2.append(bg_x2)
+            QUEEN.append(z)
+        # end loop on cells
+        data_I1.append(np.array(FL1))
+        data_I2.append(np.array(FL2))
+        data_BG1.append(np.array(BG1))
+        data_BG2.append(np.array(BG2))
+        data_queen.append(np.array(QUEEN))
+    # end loop on data sets
+
+    if backgrounds is None:
+        bgcolor='r'
+        bgs = [np.nanmedian(np.concatenate(data_BG1)), np.nanmedian(np.concatenate(data_BG2))]
+    else:
+        bgcolor='g'
+        bgs = [np.float_(backgrounds[c]) for c in range(2)]
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=(4*nplot,3))
+    gs = mgs.GridSpec(1,nplot)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for c in range(1,nplot):
+        ax = fig.add_subplot(gs[0,c])
+        axes.append(ax)
+
+    # plot fluorescence
+    data=[data_I1, data_I2]
+    for c in [c1,c2]:
+        print "channel = {:d} / {:d}".format(c,1)
+        ax=axes[c]
+        for i in range(ndata):
+            print "{:<2s}data {:d} / {:d}".format("", i, ndata-1)
+            # compute histogram
+            d = data[c][i]
+            N = len(d)
+            d = np.sort(d)
+            n0 = int(0.5*qcut*float(N))
+            print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
+            n1 = N - n0
+#            print n0, n1
+            d = d[n0:n1]
+            hist,edges = np.histogram(d, bins=bins[c][i], density=True)
+            print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
+
+            # plot histogram
+            color = colors[i]
+            #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
+            if (c ==0):
+                label=labels[i]
+            else:
+                label=None
+
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+
+        # plot background
+        ax.axvline(x=bgs[c], color=bgcolor, lw=0.5, ls='--')
+        print "background = {:.2f}".format(bgs[c])
+        # end loop on data
+
+    # plot Queen ratio
+    ax=axes[2]
+    for i in range(ndata):
+        print "{:<2s}data {:d} / {:d}".format("", i, ndata-1)
+        # compute histogram
+        d = data_queen[i]
+        N = len(d)
+        d = np.sort(d)
+        n0 = int(0.5*qcut*float(N))
+        print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
+        n1 = N - n0
+#            print n0, n1
+        d = d[n0:n1]
+        hist,edges = np.histogram(d, bins=bins[2][i], density=True)
+        print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
+
+        # plot histogram
+        color = colors[i]
+        #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
+        if (c ==0):
+            label=labels[i]
+        else:
+            label=None
+
+        ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+
+    # customize axes
+    for c in range(nplot):
+        ax=axes[c]
+        # add legends
+        if not (titles[c] is None):
+            ax.set_title(titles[c], fontsize='large')
+
+        # adjust the axis
+        if (c == 0):
+            ax.legend(loc='best',fontsize="medium",frameon=False)
+        #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+        ax.tick_params(length=4)
+        ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+
+        if not (units_dx[c] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[c]))
+#        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+#        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
+#        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
+
+        ax.set_xlim(xminxmax[c])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+    # end loop on channels
+
+    gs.tight_layout(fig)
+    if mode == 'concentration_fl':
+        filename = 'analysis_overlay_queen_concentration_fl'
+    elif mode == 'total_fl':
+        filename = 'analysis_overlay_queen_total_fl'
+
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
+
+def hist_queen_old(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], channels=[0,1], colors=['darkblue', 'darkgreen', 'darkblue'], units_dx=None, qcut=0):
     """
     Make a plot of the QUEEN signal obtained from the input dictionary of cells.
     """
@@ -198,8 +642,8 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
         ncells = len(cells)
         if ncells == 0:
             raise ValueError("Empty cell dictionary!")
-        I1 = []
-        I2 = []
+#        I1 = []
+#        I2 = []
         QUEEN=[]
 
         # make lists
@@ -208,17 +652,20 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
             key = keys[n]
             cell = cells[key]
             fl = cell['fluorescence']['total']
-            bg = cell['fluorescence']['background']
-            x = fl[c1]-bg[c1]
-            y = fl[c2]-bg[c2]
-            z = float(x)/float(y)
-            I1.append(x)
-            I2.append(y)
+            bg_px = cell['fluorescence']['background_px']
+            npx = cell['area']
+            x = fl[c1]
+            bg_x = bg_px[c1]*npx
+            y = fl[c2]
+            bg_y = bg_px[c2]*npx
+            z = (float(x)-float(bg_x))/(float(y)-float(bg_y))
+#            I1.append(x)
+#            I2.append(y)
             QUEEN.append(z)
             cell['queen_ratio']=z
 
-        I1 = np.array(I1)
-        I2 = np.array(I2)
+#        I1 = np.array(I1)
+#        I2 = np.array(I2)
         QUEEN = np.array(QUEEN, dtype=np.float_)
         data.append(QUEEN)
 
@@ -255,10 +702,11 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
 
     # adjust the axis
     ax.legend(loc='best',fontsize="medium",frameon=False)
-    ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
+    #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
     ax.tick_params(length=4)
     ax.tick_params(axis='both', labelsize='medium')
-    ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+    ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
+    ax.set_ylim(0.,None)
 
     if not (units_dx is None):
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx))
@@ -266,6 +714,7 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
 #        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=0.5))
 #        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(base=0.1))
 
+    ax.spines['left'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
 
@@ -285,7 +734,7 @@ def hist_queen(celldicts, labels, outputdir='.', bins=['auto','auto','auto'], ch
 
 #################### main ####################
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Analysis tool -- Overlay of several data set.")
+    parser = argparse.ArgumentParser(prog="Analysis tool -- Overlay of several data sets.")
     parser.add_argument('cellfiles',  type=str, nargs='+', help='Path to a cell dictionary in json format.')
     parser.add_argument('-f', '--paramfile',  type=file, required=False, help='Yaml file containing parameters.')
     parser.add_argument('-d', '--outputdir',  type=str, required=False, help='Output directory')
@@ -335,13 +784,13 @@ if __name__ == "__main__":
 
     # parameter file
     if namespace.paramfile is None:
-        allparams = default_parameters()
+        params = default_parameters()
         paramfile = "analysis_overlays_default.yml"
         with open(paramfile,'w') as fout:
-            yaml.dump(allparams,fout)
+            yaml.dump(params,fout)
     else:
         paramfile = namespace.paramfile.name
-        allparams = yaml.load(namespace.paramfile)
+        params = yaml.load(namespace.paramfile)
 
     dest = os.path.join(outputdir, os.path.basename(paramfile))
     if (os.path.realpath(dest) != os.path.realpath(paramfile)):
@@ -349,10 +798,11 @@ if __name__ == "__main__":
     paramfile = dest
 
     # make queen analysis
-    params=allparams['analysis_overlays']
-    if 'hist_queen' in params:
-        hist_queen(celldicts, labels, outputdir=outputdir, **params['hist_queen'])
+    if 'queen' in params:
+        hist_queen(celldicts, labels, outputdir=outputdir, **params['queen'])
 
-    if 'hist_channel' in params:
-        for channel in params['hist_channel']['channels']:
-            hist_channel(celldicts, labels, outputdir=outputdir, channel=channel, **params['hist_channel']['args'])
+    if 'fluorescence' in params:
+        hist_channel(celldicts, labels, outputdir=outputdir, **params['fluorescence'])
+
+    if 'dimensions' in params:
+        hist_dimensions(celldicts, labels, outputdir=outputdir, **params['dimensions'])

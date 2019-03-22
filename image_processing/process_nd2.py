@@ -36,8 +36,10 @@ def default_parameters():
     mydict['tend'] = 2
     mydict['fovs'] = [0,1,2]
     mydict['colors'] = [0,1]
-    mydict['xcrop'] = [0,7]
-    mydict['ycrop'] = [0,7]
+    #mydict['xcrop'] = [0,7]
+    mydict['xcrop'] = None
+    #mydict['ycrop'] = [0,7]
+    mydict['ycrop'] = None
 
     return params
 

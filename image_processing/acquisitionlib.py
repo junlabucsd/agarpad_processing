@@ -58,7 +58,7 @@ import tifffile as ti
 
 def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xcrop=None, ycrop=None, tiffdir='TIFF'):
     """
-    Return the iterator over images contained in an ND2 file.
+    Write tiff images contained in an ND2 file and return the meta data.
     """
     # check file existence
     if not os.path.isfile(nd2file):
@@ -156,36 +156,73 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
         xhi = xhi - 1
     idx['x']=np.arange(xlo,xhi+1,dtype=np.uint)
 
-    if 't' in axes:
-        nd2_iterator.iter_axes='t'
-        print len(nd2_iterator)
-        nd2_iterator = nd2_iterator[idx['t']]
-        print len(nd2_iterator)
-        nd2_iterator.iter_axes='m'
-        nd2_iterator.bundle_axes='tcyx'
-    else:
-        nd2_iterator.iter_axes='m'
-        nd2_iterator.bundle_axes='cyx'
+
+#    if 't' in axes:
+#        nd2_iterator.iter_axes='t'
+#        print len(nd2_iterator)
+#        nd2_iterator = nd2_iterator[idx['t']]
+#        print len(nd2_iterator)
+#        nd2_iterator.bundle_axes='tcyx'
+#    else:
+    nd2_iterator.bundle_axes='cyx'
 
 #    print nd2_iterator.axes
 #    print nd2_iterator.sizes
     # format for file out
 
-    print "Starting per-FOV writing"
-    for fov in idx['m']:
-        print "FOV {:d}".format(fov)
-        frame = nd2_iterator[fov]
-        fov_no = frame.frame_no
+    if 'm' in axes:
+        nd2_iterator.iter_axes='m'
+        print "Starting per-FOV writing"
+        for fov in idx['m']:
+            print "FOV {:d}".format(fov)
+            frame = nd2_iterator[fov]
+            fov_no = frame.frame_no
+            tiff_meta = frame.metadata
+            if (fov_no != fov):
+                print "Inconsistency for fov {:d}: fov_no={:d}".format(fov,fov_no)
+            if 't' in axes:
+                raise ValueError("Time axis handling not implemented yet.")
+                frame.iter_axes='t'
+            else:
+                fmt=fmtdict['m']
+                img = np.array(frame)
+                # filtering
+                ## color
+                img = img[idx['c']]
+                ## y cropping
+                img = img[:, idx['y']]
+                ## x cropping
+                img = img[:,:,idx['x']]
+                # write tiff as a stack
+                fname = "{}_{}".format(bname,fmt)
+                fname = fname.format(fov=fov)
+                fileout = os.path.join(tiffdir,fname+'.tif')
+                ti.imwrite(fileout, img, imagej=True, photometric='minisblack',metadata=tiff_meta)
+                print "{:<20s}{:<s}".format('fileout', fileout)
+    else:
+        frame = nd2_iterator
         tiff_meta = frame.metadata
-        if (fov_no != fov):
-            print "Inconsistency for fov {:d}: fov_no={:d}".format(fov,fov_no)
         if 't' in axes:
-            raise ValueError("Time axis handling not implemented yet.")
             frame.iter_axes='t'
-            frame.bundle_axes='cyx'
+            nt = sizes['t']
+            fmt = fmtdict['t']
+            fname = bname + "_" + fmt
+            for t in idx['t']:
+                img = np.array(frame[t])
+                # filtering
+                ## color
+                img = img[idx['c']]
+                ## y cropping
+                img = img[:, idx['y']]
+                ## x cropping
+                img = img[:,:,idx['x']]
+                # write tiff as a stack
+                fileout = os.path.join(tiffdir,fname.format(t=t) +'.tif')
+                ti.imwrite(fileout, img, imagej=True, photometric='minisblack',metadata=tiff_meta)
+                print "{:<20s}{:<s}".format('fileout', fileout)
+            sys.exit()
         else:
-            fmt=fmtdict['m']
-            img = np.array(frame)
+            img = np.array(frame[0])
             # filtering
             ## color
             img = img[idx['c']]
@@ -194,8 +231,7 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
             ## x cropping
             img = img[:,:,idx['x']]
             # write tiff as a stack
-            fname = "{}_{}".format(bname,fmt)
-            fname = fname.format(fov=fov)
+            fname = bname
             fileout = os.path.join(tiffdir,fname+'.tif')
             ti.imwrite(fileout, img, imagej=True, photometric='minisblack',metadata=tiff_meta)
             print "{:<20s}{:<s}".format('fileout', fileout)
