@@ -158,9 +158,11 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
     amin = np.min(img)
     amax = np.max(img)
     print "amin = {:.1g}    amax = {:.1g}".format(amin,amax)
-    img = (img - amin)/(amax-amin)
+    img = (np.float_(img) - amin)/(amax-amin)
 
     ## thresholding to binary mask
+    norm8 = float(2**8-1)
+    norm16 = float(2**16-1)
     if threshold is None:
         print "OTSU thresholding"
         # convert to 8-bit image (Open CV requirement for OTSU)
@@ -168,17 +170,22 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
         img8 = np.copy(img)
         # OTSU threshold
         ret,img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        thres1 = float(ret)/norm8*(amax-amin) + amin
+        thres8 = np.uint8(thres1*norm8)
+        thres16 = np.uint16(thres1*norm16)
     else:
-        th = max((threshold - amin)/(amax-amin),0) # value in rescaled DNR
-        th = np.uint8(255*th) # uint8
-        print "threshold = {:.1g}    th = {:d}".format(threshold,th)
+        thres1 = threshold
+        thres8 = np.uint8(thres1*norm8)
+        thres16 = np.uint16(thres1*norm16)
+        ret = max((thres1 - amin)/(amax-amin),0) # value in rescaled DNR
+        ret = np.uint8(255*ret) # uint8
+        print "thres1 = {:.1g}    threshold_rescaled_DNR_uint8 = {:d}".format(thres1,ret)
         # convert to 8-bit image (Open CV requirement for OTSU)
         img = np.array(255*img,np.uint8)
         img8 = np.copy(img)
         # input threshold
-        ret,img = cv2.threshold(img,th,255,cv2.THRESH_BINARY)
-    thres = np.int_(ret)
-    print "thres = {:d}".format(thres)
+        ret1,img = cv2.threshold(img,ret,255,cv2.THRESH_BINARY)
+    print "thres1 = {:.1g}    thres8 = {:d}    thres16 = {:d}".format(thres1, thres8, thres16)
     img_bin = np.copy(img)
 
     ## opening/closing operations
@@ -300,7 +307,7 @@ def get_estimator_boundingbox(tiff_file, channel=0, outputdir='.', w0=1, w1=100,
         ncolors=(20-1)
         labels_iterated = np.uint8(labels - np.int_(labels / ncolors) * ncolors) + 1
         images = [img_base, img_bin, img_morph, labels_iterated, eimg]
-        titles = ['original','binary (thres = {:d})'.format(thres),'closing/opening','bounding box','estimator']
+        titles = ['original','binary (thres = {:d})'.format(thres8),'closing/opening','bounding box','estimator']
         cmaps=['gray','gray','gray','tab20c','viridis']
         nfig=len(images)
         nrow = int(np.ceil(np.sqrt(nfig)))

@@ -65,15 +65,15 @@ def get_background_checkerboard(img, size=65):
     for j in range(nh):
         h0 = hedges[j]
         h1 = hedges[j+1]
-#        print "h0 = {:d}    h1 = {:d}".format(h0,h1)
+        print "h0 = {:.1e}    h1 = {:.1e}".format(h0,h1)
         for i in range(nw):
             w0 = wedges[i]
             w1 = wedges[i+1]
-#            print "w0 = {:d}    w1 = {:d}".format(w0,w1)
+            print "w0 = {:.1e}    w1 = {:.1e}".format(w0,w1)
             rect = img[h0:h1:,w0:w1]
 
             val = np.median(rect)
-#            print "median = {:d}".format(val)
+            print "median = {:.1e}".format(val)
             bg[h0:h1,w0:w1] = val
             img_coarse[j,i] = val
 
@@ -237,6 +237,9 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
             # method for background subtraction using sliding window
             img_bg[c] = get_background(arr, size=bg_size)
             idx = arr > img_bg[c]
+#            print np.unique(arr)
+#            print np.unique(img_bg[c])
+#            print ""
             arr[idx] = arr[idx] - img_bg[c][idx]
             arr[~idx] = 0
             img_subtracted[c] = np.copy(arr)
@@ -292,7 +295,7 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
         axes=[]
         for r in range(nrow):
             for c in range(ncol):
-                image = images[c][r]
+                image = np.float_(images[c][r])
                 i0 = np.min(image)
                 i1 = np.max(image)
                 image = (np.array(image, dtype=np.float_) - i0)/(i1-i0)

@@ -164,7 +164,123 @@ def hist_dimensions(cells, outputdir='.', bins=['auto','auto','auto','auto'], un
         print "Fileout: {:<s}".format(fileout)
     return
 
-def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, mode='total',qcut=0, bg_val=None):
+def hist_dimensions_other(cells, outputdir='.', bins=None, units_dx=None, alpha=0.):
+    """
+    Plot the histograms of several other dimensions:
+      * aspect ratio height/width
+      * ratio cell area / bounding rectangle area
+    """
+
+    # define functions
+    f_aspect_ratio = lambda cell: cell['height']/cell['width']
+    f_area_filling = lambda cell: cell['area']/(cell['bounding_box_rotated']['height']*cell['bounding_box_rotated']['width'])
+
+    func_list = [f_aspect_ratio, f_area_filling]
+    title_list = ["height:width ratio", "bound. box filling ratio"]
+
+    nattrs = len(func_list)
+
+    # check arguments
+    if bins is None:
+        bins = ['auto' for i in range(nattrs)]
+    elif len(bins) != nattrs:
+        raise ValueError("bins has the wrong dimensions!")
+
+    if units_dx is None:
+        units_dx = [None for i in range(nattrs)]
+    elif len(units_dx) != nattrs:
+        raise ValueError("units_dx has the wrong dimensions!")
+    ncells = len(cells)
+
+    if ncells == 0:
+        raise ValueError("Empty cell dictionary!")
+
+    pfmt = "$\\mu = {mu:,.2f}$\n$\\sigma = {sig:,.2f}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,.2f}$"
+
+    # make lists
+    data = [ [] for i in range(nattrs)]
+    keys = cells.keys()
+    for n in range(ncells):
+        key = keys[n]
+        cell = cells[key]
+        for i in range(nattrs):
+            func = func_list[i]
+            data[i].append(func(cell))
+
+    data = np.array(data)
+
+    # make plot
+    x,N = data.shape
+    mus = [np.mean(d).astype(d.dtype) for d in data]
+    meds = [np.median(d).astype(d.dtype) for d in data]
+    sigs = [np.std(d).astype(d.dtype) for d in data]
+    errs = [s/np.sqrt(N) for s in sigs]
+
+    fig = plt.figure(num=None, facecolor='w', figsize=(nattrs*4,3))
+    gs = mgs.GridSpec(1,nattrs)
+
+    ax0 = fig.add_subplot(gs[0,0])
+    axes = [ax0]
+    for i in range(1,nattrs):
+        ax = fig.add_subplot(gs[0,i],sharey=ax0)
+        axes.append(ax)
+
+    for i in range(nattrs):
+        print "attr number = {:d}".format(i)
+        ax = axes[i]
+
+        # remove outliers
+        data_sorted = np.sort(data[i])
+        ntot = len(data_sorted)
+        n0 = int(0.5*alpha*float(ntot))
+        n1 = ntot - n0
+        print "{:2s}n0 = {:d}    n1 = {:d}".format("", n0, n1)
+        data_trunc = data_sorted[n0:n1]
+
+        mu = np.nanmean(data_trunc)
+        med = np.nanmedian(data_trunc)
+        sigs = [np.std(d).astype(d.dtype) for d in data]
+        sig = np.nanstd(data_trunc)
+        err = sig / np.sqrt(len(data_trunc))
+
+        # compute histogram
+        hist,edges = np.histogram(data_trunc, bins=bins[i], density=False)
+        nbins = len(edges)-1
+        print "{:2s}nbins = {:d}".format("",nbins)
+
+        # plot histogram
+        color = 'grey'
+        ax.bar(edges[:-1], hist, np.diff(edges), facecolor=color, lw=0)
+
+        # add legends
+        ax.set_title(title_list[i], fontsize='large')
+        #ax.annotate(pfmt.format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+        ax.annotate(pfmt.format(mu=mu,sig=sig, N=len(data_trunc), med=med), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+
+        # adjust the axis
+        ax.tick_params(length=4)
+        if (i==0):
+            ax.set_ylabel("count",fontsize="medium",labelpad=10)
+            ax.tick_params(axis='both', labelsize='medium')
+        else:
+            ax.tick_params(axis='both', labelsize='medium', labelleft='off')
+
+        if not (units_dx[i] is None):
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(base=units_dx[i]))
+
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+    gs.tight_layout(fig, w_pad=1.0)
+    filename = 'analysis_dimensions_other'
+    exts=['.pdf', '.svg', '.png']
+    for ext in exts:
+        fileout = os.path.join(outputdir,filename+ext)
+        fig.savefig(fileout, bbox_inches='tight', pad_inches=0)
+        print "Fileout: {:<s}".format(fileout)
+    return
+
+def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, mode='total',qcut=0, bg_val=None, backgrounds=None):
     """
     Make an histogram of the signal obtained per cell.
     """
@@ -234,7 +350,13 @@ def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, m
     meds = [np.median(d).astype(d.dtype) for d in data_fl]
     sigs = [np.std(d).astype(d.dtype) for d in data_fl]
     errs = [s/np.sqrt(N) for s,N in zip(sigs,Ns)]
-    bgs = [np.median(d).astype(d.dtype) for d in data_bg]
+    if backgrounds is None:
+        bgcolor='r'
+        bgs = [np.median(d).astype(d.dtype) for d in data_bg]
+    else:
+        bgcolor='g'
+        bgs = [np.float_(backgrounds[i]) for i in range(nchannel)]
+        print bgs
 
     # make figure
     fig = plt.figure(num=None, facecolor='w', figsize=(nchannel*4,3))
@@ -268,7 +390,7 @@ def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, m
         # add legends
         ax.set_title(titles[i], fontsize='large')
         ax.annotate(fmt.format(mu=mus[i],sig=sigs[i], N=len(data_fl[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
-        ax.axvline(x=bgs[i], color='r', lw=0.5, ls='--')
+        ax.axvline(x=bgs[i], color=bgcolor, lw=0.5, ls='--')
 
         # adjust the axis
         ax.tick_params(length=4)
@@ -311,7 +433,7 @@ def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, m
         print "Fileout: {:<s}".format(fileout)
     return
 
-def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['I1','I2','QUEEN'], channels=[0,1], colors=['darkblue', 'darkgreen', 'darkblue'], units_dx=[None, None, None], mode='total_fl'):
+def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['I1','I2','QUEEN'], channels=[0,1], colors=['darkblue', 'darkgreen', 'darkblue'], units_dx=[None, None, None], mode='total_fl', bgcolor='r',qcut=0, backgrounds=None):
     """
     Make a plot of the QUEEN signal obtained from the input dictionary of cells.
     """
@@ -323,7 +445,9 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
     c1 = channels[0]
     c2 = channels[1]
     I1 = []
+    BG1 = []
     I2 = []
+    BG2 = []
     QUEEN=[]
 
     if mode == 'concentration_fl':
@@ -337,15 +461,24 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
         fl_fmt = "$\\mu = {mu:,d}$\n$\\sigma = {sig:,d}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:,d}$"
     else:
         raise ValueError('Wrong mode selection: \'total_fl\' or \'concentration_fl\'')
+
+    if backgrounds is None:
+        bgcolor='r'
+    else:
+        bgcolor='g'
+
     # make lists
     keys = cells.keys()
     for n in range(ncells):
         key = keys[n]
         cell = cells[key]
         fl = cell['fluorescence']['total']
-        bg = cell['fluorescence']['background']
-        x = fl[c1]-bg[c1]
-        y = fl[c2]-bg[c2]
+        bg_px = cell['fluorescence']['background_px']
+        npx = cell['area']
+        x = fl[c1]
+        y = fl[c2]
+        bg_x = bg_px[c1]*npx
+        bg_y = bg_px[c2]*npx
         if mode == 'concentration_fl':
             try:
                 volume = cell['volume']
@@ -353,25 +486,41 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
                 raise ValueError('Missing volume attribute in cell!')
             x = float(x) / volume
             y = float(y) / volume
+            if backgrounds is None:
+                bg_x = float(bg_x) / volume
+                bg_y = float(bg_y) / volume
+            else:
+                bg_x  = backgrounds[c1]
+                bg_y  = backgrounds[c2]
         elif mode == 'total_fl':
             pass
-        z = float(x)/float(y)
+        z = (float(x)-float(bg_x))/(float(y)-float(bg_y))
         I1.append(x)
+        BG1.append(bg_x)
         I2.append(y)
+        BG2.append(bg_y)
         QUEEN.append(z)
         cell['queen_ratio']=z
 
     I1 = np.array(I1, dtype=fl_dtype)
+    BG1 = np.array(BG1, dtype=fl_dtype)
     I2 = np.array(I2, dtype=fl_dtype)
+    BG2 = np.array(BG2, dtype=fl_dtype)
     QUEEN = np.array(QUEEN, dtype=np.float_)
+    print np.unique(BG1)
+    print np.unique(BG2)
 
     # make plot
     N = len(I1)
     data = [I1, I2, QUEEN]
-    mus = [np.mean(d).astype(d.dtype) for d in data]
-    meds = [np.median(d).astype(d.dtype) for d in data]
-    sigs = [np.std(d).astype(d.dtype) for d in data]
-    errs = [s/np.sqrt(N) for s in sigs]
+#    mus = [np.mean(d).astype(d.dtype) for d in data]
+#    meds = [np.median(d).astype(d.dtype) for d in data]
+#    sigs = [np.std(d).astype(d.dtype) for d in data]
+#    errs = [s/np.sqrt(N) for s in sigs]
+    mu_bg1 = np.median(BG1)
+    mu_bg2 = np.median(BG2)
+    data_bg = [BG1, BG2]
+    print "bg1 = {:.2f}    bg2 = {:.2f}".format(mu_bg1,mu_bg2)
     fmts = [fl_fmt,fl_fmt,"$\\mu = {mu:.2f}$\n$\\sigma = {sig:.2f}$\n$N = {N:,d}$\n$\\mathrm{{med}} = {med:.2f}$"]
 
     fig = plt.figure(num=None, facecolor='w', figsize=(3*4,3))
@@ -387,7 +536,13 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
         ax = axes[i]
 
         # compute histogram
-        hist,edges = np.histogram(data[i], bins=bins[i], density=False)
+        d = data[i]
+        N = len(d)
+        d = np.sort(d)
+        n0 = int(qcut*float(N))
+        n1 = min(int((1.-qcut)*float(N)),N-1)
+        d = d[n0:n1+1]
+        hist,edges = np.histogram(d, bins=bins[i], density=False)
         nbins = len(edges)-1
         print "nbins = {:d}".format(nbins)
 
@@ -395,9 +550,21 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
         color = colors[i]
         ax.bar(edges[:-1], hist, np.diff(edges), facecolor=color, lw=0)
 
+        # stat
+        mu = np.mean(d)
+        med = np.median(d)
+        sig = np.std(d)
+        err = sig/np.sqrt(len(d))
+
         # add legends
         ax.set_title(titles[i], fontsize='large')
-        ax.annotate(fmts[i].format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+        ax.annotate(fmts[i].format(mu=mu,sig=sig, N=len(d), med=med), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
+        if (i==0):
+            ax.axvline(x=mu_bg1, color=bgcolor, lw=0.5, ls='--')
+        elif (i==1):
+            ax.axvline(x=mu_bg2, color=bgcolor, lw=0.5, ls='--')
+        else:
+            pass
 
         # adjust the axis
         if (i==0):
@@ -486,6 +653,14 @@ if __name__ == "__main__":
             os.makedirs(mydir)
         print "{:<20s}{:<s}".format("outputdir", mydir)
         hist_dimensions(cells, outputdir=mydir, **allparams['dimensions'])
+
+    # dimensions other
+    if 'dimensions_other' in allparams:
+        mydir = os.path.join(outputdir,'dimensions')
+        if not os.path.isdir(mydir):
+            os.makedirs(mydir)
+        print "{:<20s}{:<s}".format("outputdir", mydir)
+        hist_dimensions_other(cells, outputdir=mydir, **allparams['dimensions_other'])
 
     # make queen analysis
     if 'fluorescence' in allparams:

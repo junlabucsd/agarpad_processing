@@ -208,23 +208,36 @@ def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
     data = np.reshape(data, (nchannels, nfiles*height*width))
 
     # scale to 8-bit
-    norm = float(2**8-1)
-    data = np.array(norm*data, dtype=np.uint8)
+    norm8 = float(2**8-1)
+    norm16 = float(2**16-1)
+    data_min = np.zeros(nchannels)
+    data_max = np.zeros(nchannels)
+    for c in range(nchannels):
+        amin = np.nanmin(data[c])
+        amax = np.nanmax(data[c])
+        data_min[c]=amin
+        data_max[c]=amax
+        data[c] = norm8*(data[c] - amin)/(amax-amin)
+    data = np.array(data, dtype=np.uint8)
     #print data.shape
 
     # compute threshold per channel
     thresholds = []
     for c in range(nchannels):
         thres8, res = cv2.threshold(data[c], 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        thres16 = np.uint16(float(thres8) / norm * float(2**16-1))
-        thresholds.append([c, thres8,thres16])
+        amin = data_min[c]
+        amax = data_max[c]
+        thres = float(thres8)/norm8*(amax-amin) + amin
+        thres8 = np.uint8(thres*norm8)
+        thres16 = np.uint16(thres*norm16)
+        thresholds.append([c, thres, thres8,thres16])
 
     thresholds = np.array(thresholds)
     # write
     if write:
-        header="channel, uint8, uint16"
+        header="channel, float, uint8, uint16"
         fileout = os.path.join(outputdir, "thresholds_otsu.txt")
-        np.savetxt(fileout,thresholds, header=header,fmt='%-8d%-8d%-8d')
+        np.savetxt(fileout,thresholds, header=header,fmt='%-8d%-8.4f%-8d%-8d')
         print "{:<20s}{:<s}".format("fileout",fileout)
 
     # return

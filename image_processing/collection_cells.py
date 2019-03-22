@@ -125,12 +125,13 @@ def write_crop(img, mask, points, bname, tiff_dir='.', mask_dir='.', pad_x=5, pa
         subimg = subimg[:, :, x0:x1+1]
 
     if debug:
+        channel_to_plot=2
         debugdir = os.path.join(tiff_dir,'debug')
         if not os.path.isdir(debugdir):
             os.makedirs(debugdir)
         import matplotlib.pyplot as plt
         plt.subplot(151)
-        plt.imshow((img[3]-np.min(img[3]))/(np.max(img[3])-np.min(img[3])), cmap='gray')
+        plt.imshow((img[channel_to_plot]-np.min(img[channel_to_plot]))/(np.max(img[channel_to_plot])-np.min(img[channel_to_plot])), cmap='gray')
         plt.xticks([]),plt.yticks([])
 
         plt.subplot(152)
