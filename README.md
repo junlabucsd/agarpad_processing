@@ -2,7 +2,7 @@
 Scripts written to analyze images obtained from agar pad imaging.
 
 ## Getting started
-A docker image containing the required Python libraries is available in `docker/`. The directions below explain how to get a working docker image that can run the APP code.
+A docker image containing the required Python libraries is available in `dockerfile/`. The directions below explain how to get a working docker image that can run the APP code.
 
 ### Prerequisites
 
@@ -17,7 +17,7 @@ cd dockerfile/
 sudo docker build -t root/app:18.04 18.04/.
 ```
 
-Optionally you can create an additional image with user name and ID matching your local machine. Your `/home/user/` directory will be mounted at the same location within your container so that you can easily access your file system. First edit the file `dockerfiles/user/Dockerfile` and replace the user name, user ID, group name and group ID to match those on your local machine. Then:
+Optionally you can create an additional image with user name and ID matching your local machine. Your `/home/user/` directory will be mounted at the same location within your container so that you can easily access your file system. First edit the file `dockerfile/user/Dockerfile` and replace the user name, user ID, group name and group ID to match those on your local machine. Then:
 
 ```
 sudo docker build -t user/app:18.04 user/.
@@ -40,7 +40,7 @@ The starting point of the workflow is a a Nikon ND2 file. Let us call it `agarpa
 python script.py -f param_file.yml other arguments
 ```
 
-The file `param_file.yml` contains configuration options for the script. Template parameter files are available in `roles/`. We start from a directory containing the following:
+The file `param_file.yml` contains configuration options for the script. A template parameter file is available in `roles/`. We start from a directory containing the following:
 ```
 .
 |-- agarpad_images.nd2
@@ -49,7 +49,7 @@ The file `param_file.yml` contains configuration options for the script. Templat
     `-- params.yml
 ```
 
-Note that help on the arguments of a particular script can always be obtained using the `-h` option:
+The directory `code/` should point to the root of the APP repository. Note that help on the arguments of a particular script can always be obtained using the `-h` option:
 ```
 python script.py -h
 ```
@@ -76,7 +76,7 @@ With the template parameter file provided, we obtained:
 ```
 
 ### Pre-processing the TIFFs
-This step is optional. As is standard, raw images generally need some pre-processing before proceeding to the actual image analysis (eg segmentation). Concretely, this script will apply some smoothening Gaussian blur filter, as well as morphological operations (closing/opening). Optionally, it can also subtract the background, and invert the signal (namely transform light background images to dark background images, typically for phase contrast). The background is computed by applying a sliding window of fixed size across the image and computing the median in that window.
+This step is optional. As is standard, raw images generally need some pre-processing before proceeding to the actual image analysis (eg segmentation). Concretely, this script will apply a Gaussian blur filter, as well as morphological operations (closing/opening). Optionally, it can also subtract the background, and invert the signal (namely transform light background images into dark background images, typically to make phase contrast similar to fluorescence channels). The background is computed by applying a sliding window of fixed size across the image and computing the median in that window.
 
 A typical command will be:
 ```
@@ -174,10 +174,10 @@ We obtained:
 Several remarks:
 * The result of the segmentation is available in the `cells/segmentation` directory.
 * The `--debug` argument is optional: it allows the user to visualize and troubleshoot the segmentation for different FOVs. Plots are written in directories named `debug/` corresponding to the masks, labels and estimators creations.
-* The segmentation is simply based on a threshold value. The channel from which should the segmentation be performed must be passed in the parameter file.
-* There is a `threshold` parameter in the parameter file. If no value is given, or if `null`, then a threshold is determined with the OTSU method for each FOV. If a value is passed, it must be a value between 0 and 1. For example, for a typical 16-bits images, the total range of value [0, 65535] is scaled down linearly to [0,1]. For that purpose, one can also use the script `utils.py` with the optional argument `--otsu` in order to apply the OTSU method to several images at once. This might prove useful especially when some FOV are empty.
-* The masks are written in sparse matrix format (`.npz`). Those are binary matrices with same dimensions of the corresponding FOVs. Entries are set to 1 when a cell is detected and 0 otherwise.
-* The estimators are computed from the masks. For each connected component of the mask (i.e. candidate cell), several criteria are computed thanks to arguments passed in the `params.yml` file. To each cell is given a score that reflects how good it satisfies those criteria.
+* The segmentation is simply based on a threshold value. The channel from which the segmentation is performed must be passed in the parameter file.
+* There is a `threshold` parameter in the parameter file. If no value is given, or if `null`, then a threshold is determined with the OTSU method for each FOV. If a value is passed, it must be a value between 0 and 1. For example, for a typical 16-bits images, the total range of value [0, 65535] is scaled down linearly to [0,1]. For that purpose, one can also use the script `utils.py` with the optional argument `--otsu` in order to compute the value of the OTSU threshold from several images at once. This might prove useful especially when some FOV are empty and the user wants to use the same value across all the FOVs of the experiment.
+* The masks are written in sparse matrix format (`.npz`). Those are binary matrices with same xy dimensions as the corresponding FOVs. Entries are set to 1 when a cell is detected and 0 otherwise.
+* The estimators are computed from the masks. For each connected component of the mask (i.e. candidate cell), several criteria are computed according to the arguments passed in the `params.yml` file. To each cell is given a score that reflects how good it satisfies those criteria.
 * The labels are computed from those cells that passed a minimum score, defined as the `mask_params->threshold` parameter in the parameter file.
 
 ### Construction of cell dictionary
@@ -239,7 +239,7 @@ Several remarks:
 * Saving one mask and one cropped tiff image for every cell might take a lot of disk space. It is possible to not write any of those by passing the `--lean` optional argument. In that case, the the cell dictionary in JSON format is the only output.
 
 ##  Data analysis
-The script `analysis.py` allows one to visualize some information from the segmented cells. For example, dimension distributions are useful. One may also first run the above analysis with a restrained number of FOVs, control attributes such as cell width, aspect ratio, box filling fraction, and adjust accordingly the segmentation parameters before running on the segmentation on all FOVs and all channels.
+The script `analysis.py` allows one to visualize some information from the segmented cells. For example, dimensions distributions are useful. One may also first run the above analysis with a restrained number of FOVs, control attributes such as cell width, aspect ratio, box filling fraction, and adjust accordingly the segmentation parameters before running the segmentation on all FOVs and all channels.
 
 Using the parameter file provided as template:
 ```
