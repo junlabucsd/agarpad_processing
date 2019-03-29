@@ -14,7 +14,7 @@ The first step is to create a docker image that contains all required compilers 
 
 ```
 cd dockerfile/
-sudo docker build -t root/app:18.04 18.04/.
+sudo docker build -t root/app:18.04 root/.
 ```
 
 Optionally you can create an additional image with user name and ID matching your local machine. Your `/home/user/` directory will be mounted at the same location within your container so that you can easily access your file system. First edit the file `dockerfile/user/Dockerfile` and replace the user name, user ID, group name and group ID to match those on your local machine. Then:
