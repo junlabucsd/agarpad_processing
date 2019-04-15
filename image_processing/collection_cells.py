@@ -326,7 +326,7 @@ if __name__ == "__main__":
             cell['bounding_box_rotated']['ycoord_center']=xymid[1]
             cell['bounding_box_rotated']['width']=w
             cell['bounding_box_rotated']['height']=h
-            cell['bounding_box_rotated']['angle']=h
+            cell['bounding_box_rotated']['angle']=angle
 
             # dimensions
             if w > h:
