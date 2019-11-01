@@ -154,6 +154,16 @@ def get_background_medianblur(img, size=201):
     myimg = (myimg - imin) / (imax - imin)
     myimg = np.array(255*myimg, dtype=np.uint8)
     bg = cv2.medianBlur(myimg, ksize=size)
+#
+#    size = 2* (size//2) + 1 # I like odd numbers
+#    footprint = np.ones((size,size))
+#    nrange = np.arange(size)
+#    NN,MM = np.meshgrid(nrange,nrange)
+#    n0 = size//2
+#    idx = ((NN-n0)**2+(MM-n0)**2 < (0.5*size)**2)
+#    footprint[~idx] = 0
+#    myimg = simg.median_filter(myimg, footprint=footprint, mode='reflect')
+
 
     bg = cv2.blur(bg,ksize=(size,size)) # maybe not essential, to smooth background values
     bg = np.array(bg, dtype=np.float32)/255
@@ -161,6 +171,108 @@ def get_background_medianblur(img, size=201):
     bg = np.array(bg, dtype=img.dtype)
 
     return bg
+
+def get_background_logmean_fft(img, size=201, logtransform=False):
+    shape = img.shape
+    if len(shape) != 2:
+        raise ValueError("img must be a 2D array")
+    dtype = img.dtype
+    norm = get_img_norm(dtype)
+
+    # rescale
+    myimg = np.array(img, dtype=np.float32)
+    imin = np.min(myimg)
+    imax = np.max(myimg)
+    scale = (imax-imin)
+
+    offset = 0.
+    if (imin < 0.):
+        offset = 2*np.abs(imin)
+    elif (imin ==  0.):
+        offset = np.sort(np.unique(myimg))[1]
+    myimg = (myimg+offset)/scale
+
+    # do the fft rescaling
+    h,w = myimg.shape
+    l = size//2
+    #print("l = {:d}".format(l))
+    X = np.zeros((h+2*l,w+2*l))
+    hnew,wnew = X.shape
+    F = np.zeros((hnew,wnew))
+    hrange = np.arange(hnew)
+    wrange = np.arange(wnew)
+
+    kfreq_h = np.fft.fftfreq(hnew) # frequencies
+    kfreq_w = np.fft.fftfreq(wnew) # frequencies
+
+    # pad input image by reflection
+    if (l > 0):
+        X[l:-l,l:-l] = np.copy(myimg)
+        Xpad = X[l:2*l,l:-l]
+        X[:l,l:-l] = Xpad[::-1,:]
+        Xpad = X[-2*l:-l,l:-l]
+        X[-l:,l:-l] = Xpad[::-1,:]
+
+        Xpad = X[:,l:2*l]
+        X[:,:l] = Xpad[:,::-1]
+        Xpad = X[:,-2*l:-l]
+        X[:,-l:] = Xpad[:,::-1]
+    else:
+        X = np.copy(myimg)
+
+    # make footprint for average
+    footprint_func = lambda n,m : (n**2 + m**2 <= l**2) | ((hnew-n)**2 + m**2 <= l**2) | ((hnew-n)**2 + (wnew-m)**2 <= l**2) | (n**2 + (wnew-m)**2 <= l**2)
+    hh,ww = np.meshgrid(hrange,wrange,indexing='ij')
+    F = np.float_(footprint_func(hh,ww))
+    fsum = np.sum(F)  # normalization so that it is a mean
+    F /= fsum
+    #print("fsum = {:.6f}".format(fsum))
+    # important to check than without lognorm, with l=0, it reproduces the input after fft and ifft.
+
+    Xcpy = np.copy(X)
+    # log transform
+    if (logtransform):
+        X = np.log(X)
+
+    # fourier transform
+    Xtilde = np.fft.fftn(X)
+    Ftilde = np.fft.fftn(F)
+    X = np.real(np.fft.ifftn(Xtilde*Ftilde))
+    #print(np.max(X-Xcpy), np.median(X-Xcpy))
+
+    # log detransform
+    if (logtransform):
+        X = np.exp(X)
+    bg = X[l:-l,l:-l]
+
+#    # test
+#    import matplotlib.pyplot as plt
+#    xmin = np.min(myimg)
+#    xmax = np.max(myimg)
+#    fig=plt.figure()
+#    ax = fig.add_subplot(1,2,1)
+#    #im = ax.imshow(F)
+#    im = ax.imshow(Xcpy, vmin=xmin,vmax=xmax)
+#    fig.colorbar(im,ax=ax)
+#
+#    ax = fig.add_subplot(1,2,2)
+#    #ax.imshow(np.real(Ftilde))
+#    im = ax.imshow(X, vmin=xmin,vmax=xmax)
+#
+#    fig.colorbar(im,ax=ax)
+#
+#    fig.savefig('footprint.png')
+#    plt.close()
+#    sys.exit()
+#    # test
+
+    # restore scaling
+    bg = cv2.blur(bg,ksize=(size,size)) # maybe not essential, to smooth background values
+    #bg = np.array(bg, dtype=np.float32)/255
+    bg = scale* bg - offset
+    bg = np.array(bg, dtype=img.dtype)
+    return bg
+
 
 def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg_size=200, debug=False):
     """
@@ -184,8 +296,9 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
     """
 
     # method for background subtraction
-    get_background = get_background_medianblur
+    #get_background = get_background_medianblur
     #get_background = get_background_checkerboard
+    get_background = lambda arr, size: get_background_logmean_fft(arr, size=size, logtransform=True)
 
     # pre-processing
     bname = os.path.splitext(os.path.basename(tiff_file))[0]
@@ -235,7 +348,7 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
         if bg_subtract:
 #            print "Background subtraction..."
             # method for background subtraction using sliding window
-            img_bg[c] = get_background(arr, size=bg_size)
+            img_bg[c] = get_background(arr, bg_size)
             idx = arr > img_bg[c]
 #            print np.unique(arr)
 #            print np.unique(img_bg[c])
@@ -270,7 +383,7 @@ def preprocess_image(tiff_file, outputdir='.', invert=None, bg_subtract=True, bg
         img_bg_post = np.zeros(shape, dtype=dtype)
         for c in range(nchannel):
 #            print "c = {:d}".format(c)
-            img_bg_post[c] = get_background(img[c], size=bg_size)
+            img_bg_post[c] = get_background(img[c], bg_size)
 #            print np.unique(img[c])
 #            print np.unique(img_bg_post[c])
         debugdir = os.path.join(outputdir,'debug')

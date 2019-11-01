@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Segmentation tool -- cells.")
     parser.add_argument('-f', '--paramfile',  type=file, required=False, help='Yaml file containing parameters.')
     parser.add_argument('-d', '--outputdir',  type=str, required=False, help='Output directory')
-    parser.add_argument('--lean',  action='store_true', required=False, help='Do not write crops for collection.')
+    #parser.add_argument('--lean',  action='store_true', required=False, help='Do not write crops for collection.')
     parser.add_argument('--debug',  action='store_true', required=False, help='Enable debug mode')
 
     # INITIALIZATION
@@ -359,7 +359,7 @@ if __name__ == "__main__":
             cells.append(cell)
 
             # write tiff
-            if not namespace.lean:
+            if params['write_cropped']:
                 write_crop(img, mask, points, bname=cell_id, tiff_dir=tiff_dir, mask_dir=mask_dir,debug=namespace.debug, **params['crops'])
 
     ncells = len(cells)
