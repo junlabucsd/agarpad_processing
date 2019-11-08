@@ -1,0 +1,108 @@
+process_nd2:
+  colors:
+  fovs:
+  xcrop: [60, 1139]
+  ycrop: [60, 1139]
+
+preprocess_images:
+  invert: [1]
+  bg_subtract: True
+  bg_size: 300
+
+# um/px: 0.11
+segmentation:
+  channel: 2
+  method: bounding_box
+  estimator_params:
+    bounding_box:
+      acut: 0.85
+      aratio_min: 2.0
+      aratio_max: 10
+      h0: 15
+      h1: 200
+      w0: 7.5
+      w1: 10.5
+      border_pad: 5
+      threshold:
+  mask_params:
+    threshold: 0.95
+
+collection:
+  # normally the px2um is saved in the metadata.txt file
+  px2um: null
+  crops:
+    pad_x: 5
+    pad_y: 5
+
+#dimensions:
+#  bins:
+#    - 16
+#    - 16
+#    - 16
+#    - 16
+##  units_dx:
+##    - 20
+##    - 1
+##    - 200
+##    - 2000
+##  mode: px
+#  units_dx:
+#    - 2
+#    - 0.1
+#    - 2
+#    - 2
+#  mode: um
+
+#dimensions_other:
+#  bins:
+#    - 16
+#    - 16
+#  units_dx:
+#    - 2
+#    - 0.10
+
+#fluorescence:
+#  bins:
+#    - 16
+#    - 16
+#    - 16
+#  titles:
+#    - 405 ex
+#    - 488 ex
+#    - PC
+#  units_dx:
+#    - 0.5
+#    - 0.5
+#    - 10.
+#  mode: concentration_fl
+#  qcut: 0.05
+#  backgrounds:
+#    - 1.7
+#    - 2.3
+#    - 90
+#
+#queen:
+#  bins:
+#    - 16
+#    - 16
+#    - 16
+#  channels:
+#    - 0
+#    - 1
+#  titles:
+#    - 405 ex
+#    - 488 ex
+#    - QUEEN ratio
+#  colors:
+#    - 'darkblue'
+#    - 'darkgreen'
+#    - 'darkred'
+#  mode: concentration_fl
+#  units_dx:
+#    - 0.5
+#    - 0.5
+#    - 1.0
+#  qcut: 0.05
+#  backgrounds:
+#    - 1.7
+#    - 2.3

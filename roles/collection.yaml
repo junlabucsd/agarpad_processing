@@ -1,0 +1,9 @@
+collection:
+  # normally the px2um is saved in the metadata.txt file
+  px2um: null
+  # enables writing the cropped images (non-rotated bounding boxes)
+  write_cropped: False
+  # crops cells that are closer than below values from the edges.
+  crops:
+    pad_x: 5
+    pad_y: 5

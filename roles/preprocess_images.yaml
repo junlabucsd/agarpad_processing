@@ -1,0 +1,4 @@
+preprocess_images:
+  invert: [1]
+  bg_subtract: True
+  bg_size: 300

@@ -1,0 +1,27 @@
+dimensions:
+  bins:
+    - 32
+    - 32
+    - 32
+    - 32
+#  units_dx:
+#    - 20
+#    - 1
+#    - 200
+#    - 2000
+#  mode: px
+  units_dx:
+    - 2
+    - 0.1
+    - 2
+    - 2
+  mode: um
+
+#dimensions_other:
+#  bins:
+#    - 32
+#    - 32
+#  units_dx:
+#    - 2
+#    - 0.10
+

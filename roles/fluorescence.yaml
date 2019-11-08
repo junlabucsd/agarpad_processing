@@ -1,0 +1,17 @@
+fluorescence:
+  bins:
+    - 16
+    - 16
+  titles:
+    - 488 ex
+    - PC
+#  units_dx:
+#    - 0.5
+#    - 0.5
+#    - 10.
+  mode: concentration_fl
+  qcut: 0.05
+#  backgrounds:
+#    - 1.7
+#    - 2.3
+#    - 90

@@ -1,0 +1,6 @@
+process_nd2:
+  colors:
+  fovs:
+  xcrop: [60, 1139]
+  ycrop: [60, 1139]
+
