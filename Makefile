@@ -5,6 +5,7 @@ PARAMS_PRE := roles/preprocess_images.yaml
 PARAMS_SEG := roles/segmentation.yaml
 PARAMS_COL := roles/collection.yaml
 PARAMS_PDIM := roles/dimensions.yaml
+PARAMS_PFL := roles/fluorescence.yaml
 
 ND2 := ../data/$(EXPNAME).nd2
 CELLS := cells/collection/collection.js
@@ -18,6 +19,7 @@ T_SEGDEBUG := target_segdebug
 T_SEG := target_seg
 T_COL := target_col $(CELLS)
 T_PDIM := plot_dim
+T_PFL := plot_flu
 
 # other variables
 FOVPREF_DEBUG := f00
@@ -25,7 +27,7 @@ FOVPREF := f
 
 default: $(T_OTSU)
 process: $(T_COL)
-plots: $(T_PDIM)
+plots: $(T_PDIM) $(T_PFL)
 all: plots process
 
 ##############################################################################
@@ -76,6 +78,9 @@ $(T_PDIM): $(T_COL) $(PARAMS_PDIM)
 	python code/analysis/analysis.py -f $(PARAMS_PDIM) -d . $(CELLS)
 	touch $(T_PDIM)
 
+$(T_PFL): $(T_COL) $(PARAMS_PFL)
+	python code/analysis/analysis.py -f $(PARAMS_PFL) -d . $(CELLS)
+	touch $(T_PFL)
 ##############################################################################
 # UTILS
 ##############################################################################
@@ -88,6 +93,7 @@ dummy:
 	touch $(T_SEG)
 	touch $(T_COL)
 	touch $(T_PDIM)
+	touch $(T_PFL)
 
 ##############################################################################
 # HELP AND DOC ON MAKEFILES

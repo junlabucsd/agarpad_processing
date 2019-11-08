@@ -482,9 +482,10 @@ if __name__ == "__main__":
     # copy metadata
     tiffdir=os.path.dirname(os.path.relpath(tiff_files[0], rootdir))
     metadata=os.path.join(tiffdir,'metadata.txt')
-    dest = os.path.join(outputdir,os.path.basename(metadata))
-    if (os.path.realpath(metadata) != os.path.realpath(dest)):
-        shutil.copy(metadata,dest)
+    if os.path.isfile(metadata):
+        dest = os.path.join(outputdir,os.path.basename(metadata))
+        if (os.path.realpath(metadata) != os.path.realpath(dest)):
+            shutil.copy(metadata,dest)
 
     # debug or not
     if namespace.debug:
