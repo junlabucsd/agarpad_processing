@@ -13,6 +13,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as mgs
 import matplotlib.ticker
+import matplotlib.patches as mpatches
 from matplotlib.colors import cnames as colornames
 
 # custom
@@ -62,7 +63,7 @@ def default_parameters():
     mydict['mode']='total_fl'  # alternative value is \'concentration\'
     return params
 
-def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, title=None, mode='um',qcut=0):
+def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, title=None, mode='um',qcut=0, ncol=None):
     """
     Make an histogram of the signal obtained per cell.
     """
@@ -164,11 +165,7 @@ def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, un
             # plot histogram
             color = colors[i]
             #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
-            if j == 0:
-                label = labels[i]
-            else:
-                label = None
-            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5)
         # end loop
     # end loop
 
@@ -179,8 +176,8 @@ def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, un
         #ax.annotate(fmts[i].format(mu=mus[i],sig=sigs[i], N=len(data[i]), med=meds[i]), xy=(0.70,0.98), xycoords='axes fraction', ha='left', va='top')
 
         # adjust the axis
-        if (j == 0):
-            ax.legend(loc='best',fontsize="medium",frameon=False)
+#        if (j == 0):
+#            ax.legend(loc='best',fontsize="medium",frameon=False)
         #ax.set_ylabel("pdf",fontsize="medium",labelpad=10)
         ax.tick_params(length=4)
         ax.tick_params(axis='both', labelsize='medium', labelleft=False, left=False)
@@ -195,7 +192,25 @@ def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, un
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
 
-    gs.tight_layout(fig)
+    # legend
+    patches=[]
+    for n in range(ndata):
+        label=labels[n]
+        color=colors[n]
+        if label is None:
+            label = "{:d}".format(n)
+        patch = mpatches.Patch(color=color, label=label)
+        patches.append(patch)
+    #axes[2].add_artist(plt.legend(handles=patches, loc='upper right'))
+    if (ncol is None):
+        ncol = ndata
+    #plt.figlegend(handles=patches, fontsize='small', mode='expand', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+    plt.figlegend(handles=patches, fontsize='small', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+
+    nrow=int(float(ndata)/ncol + 0.5)
+    a = 0.05
+    rect=[0., nrow*a, 1., 1.]
+    gs.tight_layout(fig, rect=rect)
     if mode == 'um':
         filename = 'analysis_overlay_dimensions_um'
     else:
@@ -208,7 +223,7 @@ def hist_dimensions(celldicts, labels, outputdir='.', bins=None, colors=None, un
         print "Fileout: {:<s}".format(fileout)
     return
 
-def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None):
+def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None, ncol=None):
     """
     Make an histogram of the signal obtained per cell.
     """
@@ -343,12 +358,7 @@ def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units
             # plot histogram
             color = colors[i]
             #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
-            if (c ==0):
-                label=labels[i]
-            else:
-                label=None
-
-            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5)
             # end loop on data
 
         # plot background
@@ -377,7 +387,25 @@ def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units
         ax.spines['top'].set_visible(False)
     # end loop on channels
 
-    gs.tight_layout(fig)
+    # legend
+    patches=[]
+    for n in range(ndata):
+        label=labels[n]
+        color=colors[n]
+        if label is None:
+            label = "{:d}".format(n)
+        patch = mpatches.Patch(color=color, label=label)
+        patches.append(patch)
+    #axes[2].add_artist(plt.legend(handles=patches, loc='upper right'))
+    if (ncol is None):
+        ncol = ndata
+    #plt.figlegend(handles=patches, fontsize='small', mode='expand', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+    plt.figlegend(handles=patches, fontsize='small', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+
+    nrow=int(float(ndata)/ncol + 0.5)
+    a = 0.05
+    rect=[0., nrow*a, 1., 1.]
+    gs.tight_layout(fig, rect=rect)
     if mode == 'concentration_fl':
         filename = 'analysis_overlay_concentration_fl'
     elif mode == 'total_fl':
@@ -390,7 +418,7 @@ def hist_channel(celldicts, labels, outputdir='.', bins=None, colors=None, units
         print "Fileout: {:<s}".format(fileout)
     return
 
-def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None):
+def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colors=None, units_dx=None, titles=None, mode='total_fl',qcut=0, xminxmax=None, backgrounds=None, ncol=None):
     """
     Make an histogram of the signal obtained per cell for the fluorescence channels used to measure the Queen ratio. Also plot the distribution of the Queen ratio.
     """
@@ -490,7 +518,12 @@ def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colo
             elif mode == 'total_fl':
                 sys.exit("Not programmed yet!")
                 pass
-            z = ((float(x1) -  float(bg_x1)) / (float(x2) - float(bg_x2)) )
+            try:
+                z = ((float(x1) -  float(bg_x1)) / (float(x2) - float(bg_x2)) )
+            except ZeroDivisionError:
+                print("x = {:.6f}    bg_x = {:.6f}    y = {:.6f}    bg_y = {:.6f}".format(x1,bg_x1,x2,bg_x2))
+                print("Skipping cell {:s}".format(cell['id']))
+                continue
             FL1.append(x1)
             FL2.append(x2)
             BG1.append(bg_x1)
@@ -543,12 +576,7 @@ def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colo
             # plot histogram
             color = colors[i]
             #ax.bar(edges[:-1], hist, np.diff(edges), color='none', edgecolor=color, lw=0.5, label=labels[i])
-            if (c ==0):
-                label=labels[i]
-            else:
-                label=None
-
-            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5, label=label)
+            ax.plot(0.5*(edges[:-1]+edges[1:]), hist, '-', color=color, lw=0.5)
 
         # plot background
         ax.axvline(x=bgs[c], color=bgcolor, lw=0.5, ls='--')
@@ -607,7 +635,25 @@ def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colo
         ax.spines['top'].set_visible(False)
     # end loop on channels
 
-    gs.tight_layout(fig)
+    # legend
+    patches=[]
+    for n in range(ndata):
+        label=labels[n]
+        color=colors[n]
+        if label is None:
+            label = "{:d}".format(n)
+        patch = mpatches.Patch(color=color, label=label)
+        patches.append(patch)
+    #axes[2].add_artist(plt.legend(handles=patches, loc='upper right'))
+    if (ncol is None):
+        ncol = ndata
+    #plt.figlegend(handles=patches, fontsize='small', mode='expand', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+    plt.figlegend(handles=patches, fontsize='small', ncol=ncol,borderaxespad=0, borderpad=0, loc='lower center', frameon=False)
+
+    nrow=int(float(ndata)/ncol + 0.5)
+    a = 0.05
+    rect=[0., nrow*a, 1., 1.]
+    gs.tight_layout(fig, rect=rect)
     if mode == 'concentration_fl':
         filename = 'analysis_overlay_queen_concentration_fl'
     elif mode == 'total_fl':
