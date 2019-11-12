@@ -1,4 +1,4 @@
-EXPNAME :=  20191029_SJ1486_wateragar
+EXPNAME :=  20191107_SJ1798_B1
 
 PARAMS_ND2 := roles/process_nd2.yaml
 PARAMS_PRE := roles/preprocess_images.yaml
@@ -6,6 +6,7 @@ PARAMS_SEG := roles/segmentation.yaml
 PARAMS_COL := roles/collection.yaml
 PARAMS_PDIM := roles/dimensions.yaml
 PARAMS_PFL := roles/fluorescence.yaml
+PARAMS_PQU := roles/queen.yaml
 
 ND2 := ../data/$(EXPNAME).nd2
 CELLS := cells/collection/collection.js
@@ -20,14 +21,15 @@ T_SEG := target_seg
 T_COL := target_col $(CELLS)
 T_PDIM := plot_dim
 T_PFL := plot_flu
+T_PQU := plot_queen
 
 # other variables
-FOVPREF_DEBUG := f00
+FOVPREF_DEBUG := f0
 FOVPREF := f
 
 default: $(T_OTSU)
 process: $(T_COL)
-plots: $(T_PDIM) $(T_PFL)
+plots: $(T_PDIM) $(T_PFL) $(T_PQU)
 all: plots process
 
 ##############################################################################
@@ -81,6 +83,10 @@ $(T_PDIM): $(T_COL) $(PARAMS_PDIM)
 $(T_PFL): $(T_COL) $(PARAMS_PFL)
 	python code/analysis/analysis.py -f $(PARAMS_PFL) -d . $(CELLS)
 	touch $(T_PFL)
+
+$(T_PQU): $(T_COL) $(PARAMS_PQU)
+	python code/analysis/analysis.py -f $(PARAMS_PQU) -d . $(CELLS)
+	touch $(T_PQU)
 ##############################################################################
 # UTILS
 ##############################################################################
@@ -94,6 +100,7 @@ dummy:
 	touch $(T_COL)
 	touch $(T_PDIM)
 	touch $(T_PFL)
+	touch $(T_PQU)
 
 ##############################################################################
 # HELP AND DOC ON MAKEFILES

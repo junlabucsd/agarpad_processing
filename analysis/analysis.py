@@ -73,9 +73,13 @@ def hist_dimensions(cells, outputdir='.', bins=['auto','auto','auto','auto'], un
         attrs = ['height','width','area', 'volume']
 
     nattrs = len(attrs)
-    if len(bins) != nattrs:
+    if bins is None:
+        bins = ['auto' for i in range(nattrs)]
+    elif len(bins) != nattrs:
         raise ValueError("bins has the wrong dimensions!")
-    if len(units_dx) != nattrs:
+    if units_dx is None:
+        units_dx = [None for i in range(nattrs)]
+    elif len(units_dx) != nattrs:
         raise ValueError("units_dx has the wrong dimensions!")
     ncells = len(cells)
 
@@ -356,7 +360,7 @@ def hist_channels(cells, outputdir='.', bins=None, units_dx=None, titles=None, m
     else:
         bgcolor='g'
         bgs = [np.float_(backgrounds[i]) for i in range(nchannel)]
-        print bgs
+        #print bgs
 
     # make figure
     fig = plt.figure(num=None, facecolor='w', figsize=(nchannel*4,3))
@@ -494,7 +498,12 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
                 bg_y  = backgrounds[c2]
         elif mode == 'total_fl':
             pass
-        z = (float(x)-float(bg_x))/(float(y)-float(bg_y))
+        try:
+            z = (float(x)-float(bg_x))/(float(y)-float(bg_y))
+        except ZeroDivisionError:
+            print("x = {:.6f}    bg_x = {:.6f}    y = {:.6f}    bg_y = {:.6f}".format(x,bg_x,y,bg_y))
+            print("Skipping cell {:s}".format(cell['id']))
+            continue
         I1.append(x)
         BG1.append(bg_x)
         I2.append(y)
@@ -507,8 +516,8 @@ def make_plot_queen(cells, outputdir='.', bins=['auto','auto','auto'], titles=['
     I2 = np.array(I2, dtype=fl_dtype)
     BG2 = np.array(BG2, dtype=fl_dtype)
     QUEEN = np.array(QUEEN, dtype=np.float_)
-    print np.unique(BG1)
-    print np.unique(BG2)
+    #print np.unique(BG1)
+    #print np.unique(BG2)
 
     # make plot
     N = len(I1)
