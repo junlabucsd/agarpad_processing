@@ -565,13 +565,12 @@ def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colo
             d = data[c][i]
             N = len(d)
             d = np.sort(d)
-            n0 = int(0.5*qcut*float(N))
-            print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
-            n1 = N - n0
-#            print n0, n1
-            d = d[n0:n1]
+            n0 = int(qcut*float(N))
+            n1 = min(int((1.-qcut)*float(N)),N-1)
+            d = d[n0:n1+1]
             hist,edges = np.histogram(d, bins=bins[c][i], density=True)
-            print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
+            nbins = len(edges)-1
+            print "{:<4s}nbins = {:,d}".format("",nbins)
 
             # plot histogram
             color = colors[i]
@@ -591,13 +590,12 @@ def hist_queen(celldicts, labels, outputdir='.', channels=[0,1], bins=None, colo
         d = data_queen[i]
         N = len(d)
         d = np.sort(d)
-        n0 = int(0.5*qcut*float(N))
-        print "{:<4s}qcut = {:.1f} %".format("",qcut*100)
-        n1 = N - n0
-#            print n0, n1
-        d = d[n0:n1]
+        n0 = int(qcut*float(N))
+        n1 = min(int((1.-qcut)*float(N)),N-1)
+        d = d[n0:n1+1]
         hist,edges = np.histogram(d, bins=bins[2][i], density=True)
-        print "{:<4s}nbins = {:,d}".format("",len(edges)-1)
+        nbins = len(edges)-1
+        print "{:<4s}nbins = {:,d}".format("",nbins)
 
         # plot histogram
         color = colors[i]

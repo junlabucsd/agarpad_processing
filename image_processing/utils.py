@@ -164,7 +164,7 @@ def get_tiff2ndarray(tiff_file,channel=0,metadata=False, normalize=True):
     else:
         return arr
 
-def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
+def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000, nfiles=20):
     """
     Read the input list of files and compute the OTSU threshold (normalized between 0 and 1).
     The result is written in the output directory.
@@ -175,7 +175,8 @@ def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
     w1=None
     h0=None
     h1=None
-    nfiles = len(tiff_files)
+    if nfiles is None:
+        nfiles = len(tiff_files)
     img = get_tiff2ndarray(tiff_files[0],channel=None)
     shape = img.shape
     if len(shape) != 3:
@@ -201,7 +202,7 @@ def get_OTSU(tiff_files, outputdir='.', write=True,NBYTESMAX=1000000000):
         print "width_new / width = {:.0f} %  height_new / height = {:.0f} %".format(100.*float(width_new)/width,100.*float(height_new)/height)
 
     # make data arrays per channels
-    data = np.array([get_tiff2ndarray(t,channel=None)[:,w0:w1,h0:h1] for t in tiff_files])
+    data = np.array([get_tiff2ndarray(tiff_files[i],channel=None)[:,w0:w1,h0:h1] for i in range(nfiles)])
     nfiles, nchannels, height, width = data.shape
     data = np.moveaxis(data, source=1, destination=0)
     data = np.reshape(data, (nchannels, nfiles*height*width))
