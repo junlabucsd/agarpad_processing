@@ -146,7 +146,7 @@ def process_nd2_tiff(nd2file, tstart=None, tend=None, fovs=None, colors=None, xc
         nx = sizes['x']
         xlo,xhi = np.asarray(xcrop,dtype=np.uint)
         xlo = max(xlo,0)
-        xhi = min(xhi,ny-1)
+        xhi = min(xhi,nx-1)
     else:
         xlo=0
         xhi=nx-1
